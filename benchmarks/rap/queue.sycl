@@ -1,0 +1,16 @@
+auto opt1 = buf_a.get_access<sycl::access::mode::read>(h);
+auto opt2 = buf_b.get_access<sycl::access::mode::discard_write>(h);
+auto func = buf_func.get_access<sycl::access::mode::read>(h);
+
+h.parallel_for<class KernelRAP>(size_range, [=](nd_item<1> item) {
+  const auto idx = item.get_global_id(0);
+  const auto id = idx + offset;
+  int tmp, j;
+  if (id <= M) {
+    tmp = func[0];
+    for(j=0; j<=id; ++j){
+      tmp = sycl::max(opt1[id - j] + func[j], tmp);
+      opt2[idx] = tmp; // without offset since the buffer has the offset
+    }
+  }
+});

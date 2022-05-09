@@ -1,0 +1,7 @@
+build/
+builds/
+results/
+results.txt
+reprogram_temp.sof
+profile.mon
+old_*
