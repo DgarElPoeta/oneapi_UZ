@@ -8,13 +8,19 @@ class KernelMatmul;
 //#define N 4096
 #define BL 16
 
-sycl::event submitKernel(queue& q,
+queue& getQueue(){
+    static queue qCPU(sycl::INTEL::host_selector{}, async_exception_handler);
+    return qCPU;
+}
+
+sycl::event cpu_submitKernel(queue& q,
                          sycl::buffer<ptype,2>& buf_a,
                          sycl::buffer<ptype,2>& buf_b,
                          sycl::buffer<ptype,2>& buf_c,
                          sycl::nd_range<2> size_range,
                          size_t offset,
                          int N){
+    q = getQueue();
     auto e_c = q.submit([&](handler &h) {
 
 

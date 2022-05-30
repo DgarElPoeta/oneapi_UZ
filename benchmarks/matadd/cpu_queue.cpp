@@ -3,9 +3,14 @@
 
 class KernelMatadd;
 #define MAX_WG_SIZE 16
+queue& getQueue(){
+    static queue qCPU(sycl::INTEL::host_selector{}, async_exception_handler);
+    return qCPU;
+}
 
-sycl::event submitKernel(queue& q, sycl::buffer<ptype,2>& buf_a, sycl::buffer<ptype,2>& buf_b,
+sycl::event cpu_submitKernel(queue& q, sycl::buffer<ptype,2>& buf_a, sycl::buffer<ptype,2>& buf_b,
                        sycl::buffer<ptype,2>& buf_c, sycl::nd_range<2> size_range, size_t offset){
+    q = getQueue();
     sycl::event kern_ev = q.submit([&](handler &h) {
       auto a = buf_a.get_access<sycl::access::mode::read>(h);
       auto b = buf_b.get_access<sycl::access::mode::read>(h);

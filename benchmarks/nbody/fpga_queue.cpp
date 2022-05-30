@@ -3,9 +3,19 @@
 
 class KernelNBody;
 
-sycl::event submitKernel(queue& q, sycl::buffer<float4,1>& buf_pos_in, sycl::buffer<float4,1>& buf_vel_in,
+queue& getQueue(){
+#ifdef FPGA_EMULATOR
+    static queue qFPGA(sycl::INTEL::fpga_emulator_selector{}, async_exception_handler);
+#else
+    static queue qFPGA(sycl::INTEL::fpga_selector{}, async_exception_handler);
+#endif
+    return qFPGA;
+}
+
+sycl::event fpga_submitKernel(queue& q, sycl::buffer<float4,1>& buf_pos_in, sycl::buffer<float4,1>& buf_vel_in,
                        sycl::buffer<float4,1>& buf_pos_out, sycl::buffer<float4,1>& buf_vel_out,
 						 sycl::nd_range<1> size_range, size_t offset, size_t numBodies, float epsSqr, float deltaTime){
+    q = getQueue();
     sycl::event kern_ev = q.submit([&](handler &h) {
 
 auto pos = buf_pos_in.get_access<sycl::access::mode::read>(h);

@@ -3,8 +3,12 @@
 //#include "../ray.h"
 
 class KernelRay;
+queue& getQueue(){
+    static queue qCPU(sycl::INTEL::host_selector{}, async_exception_handler);
+    return qCPU;
+}
 
-sycl::event submitKernel(queue& q, sycl::buffer<Primitive,1>& buf_prim, sycl::buffer<Pixel,1>& buf_pixels,
+sycl::event cpu_submitKernel(queue& q, sycl::buffer<Primitive,1>& buf_prim, sycl::buffer<Pixel,1>& buf_pixels,
                        int width, int height, sycl::nd_range<1> size_range, int offset,
                        float camera_x,
                        float camera_y,
@@ -13,6 +17,7 @@ sycl::event submitKernel(queue& q, sycl::buffer<Primitive,1>& buf_prim, sycl::bu
                        float viewport_y,
                        Primitive* prim_ptr,
                        size_t n_primitives){
+    q = getQueue();
     return q.submit([&](handler &h) {
 
 #if USE_LOCAL_MEM == 1

@@ -135,21 +135,29 @@ void process_static(bool cpu, Options* opts, int thr_id) {
       for(int kerns=0; kerns<kernel_reps; kerns++){
       submit_event =
         #if BENCHMARK_MATADD == 1
-        submitKernel(q, *buf_a[DB], *buf_b[DB], *buf_c[DB], size_range, offset);
+        ((cpu) ? cpu_submitKernel(q, *buf_a[DB], *buf_b[DB], *buf_c[DB], size_range, offset)
+         : fpga_submitKernel(q, *buf_a[DB], *buf_b[DB], *buf_c[DB], size_range, offset));
         #elif BENCHMARK_MATMUL == 1
-        submitKernel(q, *buf_a[DB], *buf_b[DB], *buf_c[DB], size_range, offset, N);
+        ((cpu) ? cpu_submitKernel(q, *buf_a[DB], *buf_b[DB], *buf_c[DB], size_range, offset, N)
+         : fpga_submitKernel(q, *buf_a[DB], *buf_b[DB], *buf_c[DB], size_range, offset, N));
         #elif BENCHMARK_RAP == 1
-        submitKernel(q, *buf_a[DB], *buf_b[DB], *buf_func[DB], size_range, offset, M, Rw);
+        ((cpu) ? cpu_submitKernel(q, *buf_a[DB], *buf_b[DB], *buf_func[DB], size_range, offset, M, Rw)
+         : fpga_submitKernel(q, *buf_a[DB], *buf_b[DB], *buf_func[DB], size_range, offset, M, Rw));
         #elif BENCHMARK_NBODY == 1
-        submitKernel(q, *buf_pos_in[DB], *buf_vel_in[DB], *buf_pos_out[DB], *buf_vel_out[DB], size_range, offset, numBodies, epsSqr, deltaTime);
+        ((cpu) ? cpu_submitKernel(q, *buf_pos_in[DB], *buf_vel_in[DB], *buf_pos_out[DB], *buf_vel_out[DB], size_range, offset, numBodies, epsSqr, deltaTime)
+         : fpga_submitKernel(q, *buf_pos_in[DB], *buf_vel_in[DB], *buf_pos_out[DB], *buf_vel_out[DB], size_range, offset, numBodies, epsSqr, deltaTime));
         #elif BENCHMARK_GAUSSIAN == 1
-        submitKernel(q, *buf_input[DB], *buf_filterWeight[DB], *buf_blurred[DB], size_range, offset, rows, cols, filterWidth);
+        ((cpu) ? cpu_submitKernel(q, *buf_input[DB], *buf_filterWeight[DB], *buf_blurred[DB], size_range, offset, rows, cols, filterWidth)
+         : fpga_submitKernel(q, *buf_input[DB], *buf_filterWeight[DB], *buf_blurred[DB], size_range, offset, rows, cols, filterWidth));
         #elif BENCHMARK_RAY == 1
-        submitKernel(q, buf_prim, buf_pixels, width, height, size_range, offset, camera_x, camera_y, camera_z, viewport_x, viewport_y, prim_ptr, n_primitives);
+        ((cpu) ? cpu_submitKernel(q, buf_prim, buf_pixels, width, height, size_range, offset, camera_x, camera_y, camera_z, viewport_x, viewport_y, prim_ptr, n_primitives)
+         : fpga_submitKernel(q, buf_prim, buf_pixels, width, height, size_range, offset, camera_x, camera_y, camera_z, viewport_x, viewport_y, prim_ptr, n_primitives));
         #elif BENCHMARK_MANDELBROT == 1
-        submitKernel(q, buf_out, size_range, offset, leftxF, topyF, xstepF, ystepF, max_iterations, numDevices, bench, width);
+        ((cpu) ? cpu_submitKernel(q, buf_out, size_range, offset, leftxF, topyF, xstepF, ystepF, max_iterations, numDevices, bench, width)
+         : fpga_submitKernel(q, buf_out, size_range, offset, leftxF, topyF, xstepF, ystepF, max_iterations, numDevices, bench, width));
         #elif BENCHMARK_BINOMIAL == 1
-        submitKernel(q, buf_a, buf_b, workgroups, steps, steps1);
+        ((cpu) ? cpu_submitKernel(q, buf_a, buf_b, workgroups, steps, steps1)
+         : fpga_submitKernel(q, buf_a, buf_b, workgroups, steps, steps1));
         #endif
       }
       submit_event.wait();

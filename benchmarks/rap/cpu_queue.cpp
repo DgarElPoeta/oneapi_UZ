@@ -2,9 +2,14 @@
 #include <CL/sycl.hpp>
 
 class KernelRAP;
+queue& getQueue(){
+    static queue qCPU(sycl::INTEL::host_selector{}, async_exception_handler);
+    return qCPU;
+}
 
-sycl::event submitKernel(queue& q, sycl::buffer<ptype,1>& buf_a, sycl::buffer<ptype,1>& buf_b,
+sycl::event cpu_submitKernel(queue& q, sycl::buffer<ptype,1>& buf_a, sycl::buffer<ptype,1>& buf_b,
                       sycl::buffer<ptype,1>& buf_func, sycl::nd_range<1> size_range, size_t offset, size_t M, sycl::range<1> Rw){
+    q = getQueue();
    return q.submit([&](handler &h) {
 
 auto opt1 = buf_a.get_access<sycl::access::mode::read>(h);

@@ -3,9 +3,19 @@
 
 class KernelGaussian;
 
-sycl::event submitKernel(queue& q, sycl::buffer<uchar4, 1>& buf_input, sycl::buffer<float, 1>& buf_filterWeight,
+queue& getQueue(){
+#ifdef FPGA_EMULATOR
+    static queue qFPGA(sycl::INTEL::fpga_emulator_selector{}, async_exception_handler);
+#else
+    static queue qFPGA(sycl::INTEL::fpga_selector{}, async_exception_handler);
+#endif
+    return qFPGA;
+}
+
+sycl::event fpga_submitKernel(queue& q, sycl::buffer<uchar4, 1>& buf_input, sycl::buffer<float, 1>& buf_filterWeight,
                        sycl::buffer<uchar4, 1>& buf_blurred, sycl::nd_range<1> size_range, size_t offset,
                        int rows, int cols, int filterWidth){
+    q = getQueue();
     return q.submit([&](handler &h) {
 
 auto input = buf_input.get_access<sycl::access::mode::read>(h);
@@ -13,6 +23,8 @@ auto filterWeight = buf_filterWeight.get_access<sycl::access::mode::read>(h);
 auto blurred = buf_blurred.get_access<sycl::access::mode::discard_write>(h);
 
 #define PACKED 0
+#define FILTERWIDTH 5
+#define MIDDLE 2
 // TODO: PACKED is worse than unpacked here
 
 h.parallel_for<KernelGaussian>(size_range, [=](nd_item<1> item) {
@@ -38,9 +50,10 @@ float4 blur{0.f};
   int width = cols - 1;
   int height = rows - 1;
 
-  for (int i = -middle; i <= middle; ++i) // rows
+  #pragma unroll FILTERWIDTH
+  for (int i = -MIDDLE; i <= MIDDLE; ++i) // rows
   {
-    for (int j = -middle; j <= middle; ++j) // columns
+    for (int j = -MIDDLE; j <= MIDDLE; ++j) // columns
     {
 
       int h = r + i;
@@ -59,7 +72,7 @@ float4 pixel = input[idx].convert<float>();
       float pixelZ = (input[idx].z()); //s[2]);
 #endif
 
-      idx = (i + middle) * filterWidth + j + middle;
+      idx = (i + MIDDLE) * FILTERWIDTH + j + MIDDLE;
       float weight = filterWeight[idx];
 
 #if PACKED

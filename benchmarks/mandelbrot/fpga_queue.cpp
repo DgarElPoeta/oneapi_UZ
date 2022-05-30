@@ -1,7 +1,23 @@
-#if USM
+#include <CL/sycl/INTEL/fpga_extensions.hpp>
+#include <CL/sycl.hpp>
+
+class KernelMandelbrot;
+
+queue& getQueue(){
+#ifdef FPGA_EMULATOR
+    static queue qFPGA(sycl::INTEL::fpga_emulator_selector{}, async_exception_handler);
 #else
-auto mandelbrotImage = buf_out.get_access<sycl::access::mode::discard_write>(h);
+    static queue qFPGA(sycl::INTEL::fpga_selector{}, async_exception_handler);
 #endif
+    return qFPGA;
+}
+
+sycl::event fpga_submitKernel(queue& q, sycl::buffer<ptype,1>& buf_out, sycl::nd_range<1> size_range, size_t offset, float leftxF, float topyF,
+                            float xstepF, float ystepF, uint max_iterations, uint numDevices, int bench, int width){
+    q = getQueue();
+    return q.submit([&](handler &h) {
+
+auto mandelbrotImage = buf_out.get_access<sycl::access::mode::discard_write>(h);
 
 // TODO: mandelbrot should be with lws 256
 // h.parallel_for(sycl::nd_range<1>(sycl::range<1>{size >> 2}, sycl::range<1>{lws}), [=](sycl::nd_item<1> ndItem) {
@@ -297,3 +313,6 @@ h.parallel_for(R4, [=](item<1> it) {
     }
     mandelbrotImage[4 * tid + 3] = color[3];
   });
+
+});
+}

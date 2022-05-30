@@ -1,47 +1,28 @@
-// auto opt1 = buf_a.get_access<sycl::access::mode::read>(h);
-// auto opt2 = buf_b.get_access<sycl::access::mode::write>(h);
-// auto func = buf_func.get_access<sycl::access::mode::read>(h); // TODO: discard_write?
-//
-// h.parallel_for<class test_event>(Rw, [=](item<1> item) {
-//   int tmp, j;
-//   // int myid = get_global_id(0);
-//   // auto id = item.get_id(0);
-//   const auto id = item.get_linear_id() + offset;
-//   if (id <= M) {
-// //     if (cpu){
-// //       static const CONSTANT char FMT[] = "CPU [%d]\n";
-// //       sycl::intel::experimental::printf(FMT, id);
-// //     } else {
-// // static const CONSTANT char FMT[] = "GPU [%d]\n";
-// // sycl::intel::experimental::printf(FMT, id);
-// //     }
-//     tmp = func[0];
-//     for(j=0; j<=id; ++j){
-//       tmp = sycl::max(opt1[id - j] + func[j], tmp);
-//       opt2[item] = tmp; // without offset since the buffer has the offset
-//     }
-//   }
-// });
+#include <CL/sycl/INTEL/fpga_extensions.hpp>
+#include <CL/sycl.hpp>
 
-#if USM
+class KernelMatadd;
+#define MAX_WG_SIZE 16
+
+queue& getQueue(){
+#ifdef FPGA_EMULATOR
+    static queue qFPGA(sycl::INTEL::fpga_emulator_selector{}, async_exception_handler);
 #else
+    static queue qFPGA(sycl::INTEL::fpga_selector{}, async_exception_handler);
+#endif
+    return qFPGA;
+}
+
+sycl::event fpga_submitKernel(queue& q, sycl::buffer<ptype,1>& buf_a, sycl::buffer<ptype,1>& buf_b, int workgroups, int steps, int steps1){
+    q = getQueue();
+    return q.submit([&](handler &h) {
   auto randArray = buf_a.get_access<sycl::access::mode::read>(h);
   auto output = buf_b.get_access<sycl::access::mode::discard_write>(h);
-#endif
 
   h.parallel_for_work_group(sycl::range<1>(workgroups), sycl::range<1>(steps1), [=](sycl::group<1>grp) {
 
-// float x[255];
-    float4 callA[255]; // TODO: steps1
-    float4 callB[254]; // TODO: steps
-
-// int i = grp.get_id(0);
-// size_t wg_offset = 1 * grp.get_id(0);
-// size_t wg_size = grp.get_local_range(0);
-// {
-//   static const CONSTANT char FMT[] = "group [%d] r %d\n";
-//   sycl::intel::experimental::printf(FMT, wg_offset, wg_size);
-// }
+    float4 callA[255];
+    float4 callB[254];
 
     sycl::private_memory<float4> puByr(grp);
     sycl::private_memory<float4> pdByr(grp);
@@ -50,14 +31,6 @@
     grp.parallel_for_work_item([&](sycl::h_item<1> item) {
       auto tid = item.get_local_id(0);
       auto bid = (item.get_global_id(0) / steps1);
-      // auto bid_offset = bid + offset_workgroups;
-// auto gid = item.get_global_id();
-// auto gid = item.get_logical_local_id();
-// auto gg = item.get_local_range();
-// {
-//   static const CONSTANT char FMT[] = "[%d] r %d (size %d)\n";
-//   sycl::intel::experimental::printf(FMT, bid, tid, gg.size());
-// }
 
       float4 inRand = randArray[bid];
 
@@ -73,13 +46,8 @@
       float4 d = 1.0f / u;
       float4 pu = (r - d) / (u - d);
       float4 pd = 1.0f - pu;
-// float4 puByr = pu * rInv;
       puByr(item) = pu * rInv;
-// float4 pdByr = pd * rInv;
       pdByr(item) = pd * rInv;
-
-// static const CONSTANT char FMT[] = "[%d] r %d c %d idx %d\n";
-// sycl::intel::experimental::printf(FMT, tid, r, c, idx2tid);
 
       float4 profit = s * exp(vsdt * (2.0f * tid - (float)numSteps)) - x;
       callA[tid].x() = profit.x() > 0 ? profit.x() : 0.0f;
@@ -115,10 +83,7 @@
        }
     });
 
-//agpuv1[i]+=agpuv2[i];
-// for (int ii = 1; ii < 10000; ii++) {
-//   float tanval = (sycl::sin(agpuv1[i]) * ii) / (sycl::cos(agpuv1[i]) * ii);
-//   float secval = 1.0 / sycl::cos(agpuv1[i]);
-//   agpuv1[i] = (secval * secval) - (tanval * tanval);
-// }
   });
+
+});
+}

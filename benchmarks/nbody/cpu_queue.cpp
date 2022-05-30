@@ -1,12 +1,27 @@
+#include <CL/sycl/INTEL/fpga_extensions.hpp>
+#include <CL/sycl.hpp>
+
+class KernelNBody;
+queue& getQueue(){
+    static queue qCPU(sycl::INTEL::host_selector{}, async_exception_handler);
+    return qCPU;
+}
+
+sycl::event cpu_submitKernel(queue& q, sycl::buffer<float4,1>& buf_pos_in, sycl::buffer<float4,1>& buf_vel_in,
+                       sycl::buffer<float4,1>& buf_pos_out, sycl::buffer<float4,1>& buf_vel_out,
+						 sycl::nd_range<1> size_range, size_t offset, size_t numBodies, float epsSqr, float deltaTime){
+    q = getQueue();
+    sycl::event kern_ev = q.submit([&](handler &h) {
+
 auto pos = buf_pos_in.get_access<sycl::access::mode::read>(h);
 auto vel = buf_vel_in.get_access<sycl::access::mode::read>(h);
 auto newPosition = buf_pos_out.get_access<sycl::access::mode::discard_write>(h);
 auto newVelocity = buf_vel_out.get_access<sycl::access::mode::discard_write>(h);
 
 #define COMPACT 1
-#define UNROLL_FACTOR 8
+#define UNROLL_FACTOR 128
 
-h.parallel_for<class KernelNBody>(size_range, [=](nd_item<1> item) {
+h.parallel_for<KernelNBody>(size_range, [=](nd_item<1> item) {
   size_t tid = item.get_global_id(0);
   const auto gid = tid + offset;
 
@@ -16,7 +31,8 @@ h.parallel_for<class KernelNBody>(size_range, [=](nd_item<1> item) {
 
   unsigned int i = 0;
   for (; (i + UNROLL_FACTOR) < numBodies;) {
-    for (int j = 0; j < UNROLL_FACTOR; j++, i++) { //#pragma unroll UNROLL_FACTOR
+    #pragma unroll UNROLL_FACTOR
+    for (int j = 0; j < UNROLL_FACTOR; j++, i++) {
       float4 p = pos[i];
       float4 r;
 
@@ -109,3 +125,20 @@ h.parallel_for<class KernelNBody>(size_range, [=](nd_item<1> item) {
   newPosition[gid - offset] = newPos;
   newVelocity[gid - offset] = newVel;
 });
+
+});
+
+sycl::event update_host_pos_event;
+update_host_pos_event = q.submit([&](handler &h) {
+  sycl::accessor accessor_pos(buf_pos_out, h, sycl::read_only);
+  h.update_host(accessor_pos);
+});
+
+sycl::event update_host_vel_event;
+update_host_vel_event = q.submit([&](handler &h) {
+  sycl::accessor accessor_vel(buf_vel_out, h, sycl::read_only);
+  h.update_host(accessor_vel);
+});
+
+  return kern_ev;
+}

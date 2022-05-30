@@ -1,25 +1,29 @@
-// auto global_primitives = buf_prim.get_access<sycl::access::mode::read>(h);
-// sycl::accessor<Primitive, 1, sycl::access::mode::read_write, sycl::access::target::local>
-//                   local_primitives(Rprim, h);
+#include <CL/sycl/INTEL/fpga_extensions.hpp>
+#include <CL/sycl.hpp>
+//#include "../ray.h"
 
-#if USM
+class KernelRay;
 
-#if USE_LOCAL_MEM == 1
-#if USM_USE_LOCAL_MEM_NOASYNC
-  // Primitive* primitives = (Primitive*)sycl::malloc_device(Nprim * sizeof(Primitive), q);
-  // sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::global>
-  //                   global_primitives(Rprim, h);
-  sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local>
-                    local_primitives(Rprim, h);
+queue& getQueue(){
+#ifdef FPGA_EMULATOR
+    static queue qFPGA(sycl::INTEL::fpga_emulator_selector{}, async_exception_handler);
 #else
-  auto global_primitives = buf_prim.get_access<sycl::access::mode::read>(h);
-  sycl::accessor<float, 1, sycl::access::mode::read_write, sycl::access::target::local>
-                    local_primitives(Rprim, h);
+    static queue qFPGA(sycl::INTEL::fpga_selector{}, async_exception_handler);
 #endif
-#else
-#endif
+    return qFPGA;
+}
 
-#else // not USM
+sycl::event fpga_submitKernel(queue& q, sycl::buffer<Primitive,1>& buf_prim, sycl::buffer<Pixel,1>& buf_pixels,
+                       int width, int height, sycl::nd_range<1> size_range, int offset,
+                       float camera_x,
+                       float camera_y,
+                       float camera_z,
+                       float viewport_x,
+                       float viewport_y,
+                       Primitive* prim_ptr,
+                       size_t n_primitives){
+    q = getQueue();
+    return q.submit([&](handler &h) {
 
 #if USE_LOCAL_MEM == 1
   auto global_primitives = buf_prim.get_access<sycl::access::mode::read>(h);
@@ -28,50 +32,15 @@
 #else
   auto primitives = buf_prim.get_access<sycl::access::mode::read>(h);
 #endif
-  auto pixels = buf_pixels.get_access<sycl::access::mode::discard_write>(h);
-#endif // USM
 
-  auto image_width = width;
-  auto image_height = height;
+auto pixels = buf_pixels.get_access<sycl::access::mode::discard_write>(h);
+auto image_width = width;
+auto image_height = height;
 
 #if QUEUE_NDRANGE
 h.parallel_for<class KernelRay>(size_range, [=](nd_item<1> ndItem) {
-#else // QUEUE_NDRANGE 0
-h.parallel_for(sycl::nd_range<1>(sycl::range < 1 > {gws}, sycl::range < 1 > {lws}), [=](nd_item<1> ndItem) {
 #endif // QUEUE_NDRANGE 0
-// h.parallel_for(R, [=](nd_item<1> ndItem) {
 
-#if USM
-#if USE_LOCAL_MEM == 1
-#if USM_USE_LOCAL_MEM_NOASYNC
-
-  // Primitive* primitives = (Primitive*)sycl::malloc_device(Nprim * sizeof(Primitive), q);
-  // Primitive primitives[Nprim];
-  //   auto grp = ndItem.get_group();
-  // //     auto event = grp.async_work_group_copy(local_primitives.get_pointer(), prim_ptr->get_pointer(), Nprim);
-  // //     grp.wait_for(event);
-  // if (ndItem.)
-  //
-  //     // It seems Sycl does not support using custom structs to transfer between src and dest (async_work_group_copy)
-  //     // So we need to send floats, calculate the number of floats, and then force the conversion here:
-  //     Primitive* primitives = static_cast<Primitive*>(static_cast<void*>((local_primitives.get_pointer().get())));
-  //     for (int i = 0; i<Nprim; ++i){
-  //       primitives[i] = prim_ptr[i];
-  //     }
-  //     // printf("copied %d\n", grp.get_id(0));
-  // static const CONSTANT char FMT[] = "cpied %d\n\n";
-  // sycl::ONEAPI::experimental::printf(FMT, grp.get_id(0));
-#else
-    auto grp = ndItem.get_group();
-      auto event = grp.async_work_group_copy(local_primitives.get_pointer(), global_primitives.get_pointer(), Nprim);
-      grp.wait_for(event);
-
-      // It seems Sycl does not support using custom structs to transfer between src and dest (async_work_group_copy)
-      // So we need to send floats, calculate the number of floats, and then force the conversion here:
-      Primitive* primitives = static_cast<Primitive*>(static_cast<void*>((local_primitives.get_pointer().get())));
-#endif // usm noasync
-#endif // local mem
-#else // not usm
 #if USE_LOCAL_MEM == 1
     auto grp = ndItem.get_group();
       auto event = grp.async_work_group_copy(local_primitives.get_pointer(), global_primitives.get_pointer(), Nprim);
@@ -80,7 +49,6 @@ h.parallel_for(sycl::nd_range<1>(sycl::range < 1 > {gws}, sycl::range < 1 > {lws
       // It seems Sycl does not support using custom structs to transfer between src and dest (async_work_group_copy)
       // So we need to send floats, calculate the number of floats, and then force the conversion here:
       Primitive* primitives = static_cast<Primitive*>(static_cast<void*>((local_primitives.get_pointer().get())));
-#endif
 #endif
 
 // auto grp = grp.get_id();
@@ -147,6 +115,25 @@ h.parallel_for(sycl::nd_range<1>(sycl::range < 1 > {gws}, sycl::range < 1 > {lws
 // Initializes the ray queue. OpenCL has no support for recursion, so recursive ray tracing calls
 // were replaced by a queue of rays that is processed in sequence. Since the recursive calls were
 // additive, this works.
+    /*typedef enum raytype
+    {
+      ORIGIN = 0,
+      REFLECTED = 1,
+      REFRACTED = 2
+    } ray_type;
+
+    typedef struct
+    {
+      float4 origin;
+      float4 direction;
+      float weight;
+      float depth;
+      int origin_primitive;
+      ray_type type;
+      float r_index;
+      Color transparency;
+    } RayK;*/
+
     RayK queue[MAX_RAY_COUNT];
     int rays_in_queue = 0;
     int front_ray_ptr = 0;
@@ -299,13 +286,6 @@ h.parallel_for(sycl::nd_range<1>(sycl::range < 1 > {gws}, sycl::range < 1 > {lws
           }
 
 
-
-
-
-
-
-
-
 // reflected/refracted rays have different modifiers on the color of the object
           switch (cur_ray.type) {
             case ORIGIN:acc += ray_col * cur_ray.weight;
@@ -385,3 +365,6 @@ h.parallel_for(sycl::nd_range<1>(sycl::range < 1 > {gws}, sycl::range < 1 > {lws
 // }); // end work-item
 
   });
+
+});
+}

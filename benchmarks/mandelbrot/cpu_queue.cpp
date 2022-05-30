@@ -2,9 +2,14 @@
 #include <CL/sycl.hpp>
 
 class KernelMandelbrot;
+queue& getQueue(){
+    static queue qCPU(sycl::INTEL::host_selector{}, async_exception_handler);
+    return qCPU;
+}
 
-sycl::event submitKernel(queue& q, sycl::buffer<ptype,1>& buf_out, sycl::nd_range<1> size_range, size_t offset, float leftxF, float topyF,
+sycl::event cpu_submitKernel(queue& q, sycl::buffer<ptype,1>& buf_out, sycl::nd_range<1> size_range, size_t offset, float leftxF, float topyF,
                             float xstepF, float ystepF, uint max_iterations, uint numDevices, int bench, int width){
+    q = getQueue();
     return q.submit([&](handler &h) {
 
 auto mandelbrotImage = buf_out.get_access<sycl::access::mode::discard_write>(h);
