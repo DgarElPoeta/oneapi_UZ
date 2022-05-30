@@ -103,14 +103,14 @@ void process_static(bool cpu, Options* opts, int thr_id) {
       cl::sycl::property_list prop_list =
           cl::sycl::property_list{cl::sycl::property::queue::enable_profiling()};
 
-      if(!cpu)
+      if(!cpu){
         queue q = fpga_QUEUE;
       }
       else {
         queue q = cpu_QUEUE;
       }
       //queue q = queue(sycl::host_selector{}, async_exception_handler);
-      DEBUG( "Device is: " << q.get_device().get_info<sycl::info::device::name>().c_str() );
+      //DEBUG( "Device is: " << q.get_device().get_info<sycl::info::device::name>().c_str() );
 
       #if BENCHMARK_MATADD == 1
       #include "../matadd/setup_sycl.cpp"

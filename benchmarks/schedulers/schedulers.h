@@ -23,7 +23,8 @@
    std::cout << std::this_thread::get_id() << "->"<< diffBeforeS << std::endl;\
 } while (0)
 
-#define cpu_QUEUE queue(sycl::INTEL::host_selector{}, async_exception_handler, prop_list);
+//#define cpu_QUEUE queue(sycl::INTEL::host_selector{}, async_exception_handler, prop_list);
+#define cpu_QUEUE queue(sycl::host_selector(), async_exception_handler)
 
 //#define fpga_QUEUE queue(sycl::host_selector{}, async_exception_handler, prop_list);
 #define fpga_QUEUE queue(sycl::INTEL::fpga_emulator_selector{}, async_exception_handler)
