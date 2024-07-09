@@ -1,7 +1,7 @@
-#ifndef VECTOR_ADD_NBODY_H
-#define VECTOR_ADD_NBODY_H
+#ifndef MATADD_H
+#define MATADD_H
 
-#include <CL/sycl.hpp>
+#include <sycl/sycl.hpp>
 //#include "defs.h"
 
 #include <iostream>
@@ -39,8 +39,7 @@
 #define CONSTANT
 #endif
 
-using sycl::float4;
-#define BENCHMARK_NBODY 1
+#define BENCHMARK_MATADD 1
 
 using std::ostream;
 using std::vector;
@@ -61,31 +60,15 @@ using sycl::item;
 using sycl::nd_item;
 
 #define THRESHOLD 0.51
-//#define THRESHOLD 0.10
 
-// I was thinking about extnbodyolating borders to do a proper gaussian filter for an image,
-// but the algo will be changed from the originally defined by AMD, so I skip it
-//#define EXTNBODYOLATE_BORDERS 1
+typedef float ptype;
 
-// To mimic the EngineCL behavior, we send the whole image, if not we will have new borders per every package sent
-// but we will need to calculate the proper offset inside the kernel (not as in the range)
-#define INPUT_BUFFER_SENT_ALL 1
-
-#define DEL_T 0.005f
-#define ESP_SQR 500.0f
-
-typedef float4 ptype;
-
-struct Nbody {
-  ptype* pos_in;
-  ptype* vel_in;
-  ptype* pos_out;
-  ptype* vel_out;
-  size_t size;
-  float delT;
-  float espSqr;
+struct Matadd {
+  std::vector<ptype> a;
+  std::vector<ptype> b;
+  std::vector<ptype> c;
+  uint64_t size;
 };
-//using namespace cl::sycl;
 
-#endif //VECTOR_ADD_NBODY_H
+#endif //MATADD_H
 
