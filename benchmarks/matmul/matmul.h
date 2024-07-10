@@ -1,7 +1,7 @@
-#ifndef VECTOR_ADD_MATMUL_H
-#define VECTOR_ADD_MATMUL_H
+#ifndef MATADD_H
+#define MATADD_H
 
-#include <CL/sycl.hpp>
+#include <sycl/sycl.hpp>
 //#include "defs.h"
 
 #include <iostream>
@@ -39,7 +39,7 @@
 #define CONSTANT
 #endif
 
-#define BENCHMARK_MATMUL 1
+#define BENCHMARK_MATADD 1
 
 using std::ostream;
 using std::vector;
@@ -60,25 +60,15 @@ using sycl::item;
 using sycl::nd_item;
 
 #define THRESHOLD 0.51
-//#define THRESHOLD 0.10
-
-// I was thinking about extrapolating borders to do a proper gaussian filter for an image,
-// but the algo will be changed from the originally defined by AMD, so I skip it
-//#define EXTRAPOLATE_BORDERS 1
-
-// To mimic the EngineCL behavior, we send the whole image, if not we will have new borders per every package sent
-// but we will need to calculate the proper offset inside the kernel (not as in the range)
-#define INPUT_BUFFER_SENT_ALL 1
 
 typedef float ptype;
 
 struct Matmul {
-  ptype* a;
-  ptype* b;
-  ptype* c;
-  size_t size;
+  std::vector<ptype> a;
+  std::vector<ptype> b;
+  std::vector<ptype> c;
+  uint64_t size;
 };
-//using namespace cl::sycl;
 
-#endif //VECTOR_ADD_MATMUL_H
+#endif //MATADD_H
 
