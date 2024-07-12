@@ -116,7 +116,8 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tpBefore = std::chrono::high_resolution_clock::now();
       auto diffBefore = (tpBefore - tpStart).count();
       auto tBefore = diffBefore / 1e9;
-      DEVICE_DEBUG(tBefore << " <[" << pkg << "] (" << pkgdevid << ") size: " << size << " offset: " << offset);
+      string aux = std::string(tBefore) + " < [" + std::to_string(pkg) + "] (" + std::to_string(pkgdevid) + ") size : " + std::to_string(size) + " offset : " + std::to_string(offset);
+      DEVICE_DEBUG(aux);
 
       // Include the file that setups the buffers with the benchmark data and invokes the kernel
       #include "kernel_sycl.cpp"
@@ -148,8 +149,10 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tAfter = diffAfter / 1e9;
       auto bandwidth =  sizeV[CK] / tCompute;
 
-      DEVICE_DEBUG(tAfter << " >[" << pkgV[CK] << "] Kernel times (Total : " << tTotal << " s, Compute: " << tCompute
-                    << " s. Bandwidth: " << bandwidth << " u/s)");
+      aux = std::to_string(tAfter) + " > [" + std::to_string(pkgV[CK]) +"] Kernel times (Total : " + 
+                  std::to_string(tTotal) + " s, Compute: " + std::to_string(tCompute) + 
+                  " s. Bandwidth: " + std::to_string(bandwidth) + " u/s";
+      DEVICE_DEBUG(aux);
 
       if (cpu) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
@@ -185,8 +188,11 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tAfter = diffAfter / 1e9;
       auto bandwidth =  size / tCompute;
 
-      DEVICE_DEBUG(tAfter << " >[" << pkgV[CK] << "] Kernel times (Total : " << tTotal << " s, Compute: " << tCompute
-                    << " s. Bandwidth: " << bandwidth << " u/s)");
+      string aux = std::to_string(tAfter) + " >[" + std::to_string(pkgV[CK]) +"] Kernel times (Total : " + 
+                  std::to_string(tTotal) + " s, Compute: " + std::to_string(tCompute) + 
+                  " s. Bandwidth: " + std::to_string(bandwidth) + " u/s";
+      DEVICE_DEBUG(aux);
+      
       if (cpu) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
         opts.tComputeKernelCPU += tCompute;
@@ -211,7 +217,8 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
   auto diffDevice = (tpDevEnd - tpDevInit).count(); // Time elapsed since start of device process in nanoseconds
   auto tDevice = diffDevice / 1e9; // Time elapsed since start of device process in milliseconds
 
-  DEVICE_DEBUG( tSinceStart << " end [+" << tDevice << " s.]");
-
+  string aux = std::to_string(tSinceStart) + " end [+" + std::to_string(tDevice) + " s.]";
+  DEVICE_DEBUG(aux);
+  
   (cpu) ? opts.tCPUEnd = tDevice : opts.tAccEnd = tDevice;
 }

@@ -6,7 +6,7 @@
 #define SCHEDULERS_H
 
 #define DEBUG(x) if (debug) { std::cout << x << std::endl; }
-#define DEVICE_DEBUG(x) if (debug) { std::cout << device_type << ": " << x << std::endl; }
+#define DEVICE_DEBUG(x) if (debug) { std::cout << device_type + ": " + x + "\n"; }
 #define PRINT_TIME auto tBefore = std::chrono::high_resolution_clock::now();\
    auto diffBefore = (tBefore - tStart).count();\
    auto diffBeforeS = diffBefore / 1e9;\

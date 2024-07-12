@@ -7,20 +7,6 @@
 #include "kernels.h"
 #include "queues.h"
 
-void my_list_devices(){
-    // Loop through available platforms
-    for (auto const& this_platform : sycl::platform::get_platforms() ) {
-        std::cout << "Found platform: "
-            << this_platform.get_info<sycl::info::platform::name>() << "\n";
-        // Loop through available devices in this platform
-        for (auto const& this_device : this_platform.get_devices() ) {
-            std::cout << " Device: "
-                << this_device.get_info<sycl::info::device::name>() << "\n";
-              
-        }
-        std::cout << "\n";
-    }
-}
 template <typename T>
 void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
 
@@ -58,19 +44,27 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
     uint64_t total_size = opts.pTotalSize;
     
     float cpu_prop = opts.cpuProp;
-    uint64_t size_CPU = total_size * cpu_prop;
     uint64_t pkg_size_multiple = opts.sizeMultiple;
 
-    if(cpu_prop != 1.0){
-      size_t multiples = size_CPU / pkg_size_multiple;
-      size_CPU = (multiples * pkg_size_multiple);
-    }
-    
-    uint64_t size_accelerator = total_size - size_CPU;
+    uint64_t size_accelerator = total_size * (1 - cpu_prop);
+    size_accelerator = (cpu_prop == 0.0f) ? total_size : (size_accelerator / pkg_size_multiple) * pkg_size_multiple;
+    uint64_t size_CPU = total_size - size_accelerator;
 
     uint32_t num_cpp_threads = opts.numCppThreads;
-    size_CPU = size_CPU / num_cpp_threads;
+    uint64_t eThread = (size_CPU / num_cpp_threads < pkg_size_multiple) ? num_cpp_threads : size_CPU / pkg_size_multiple;
+    if(eThread < num_cpp_threads){
+      size_CPU = (thr_id + 1 == eThread) ? size_CPU - (eThread-1) * pkg_size_multiple : pkg_size_multiple;
+    }
+    else{
+      uint64_t total_pkg = size_CPU / pkg_size_multiple;
+      uint64_t pkg_per_thread = total_pkg / num_cpp_threads;
+      uint64_t pkg_1more = total_pkg - pkg_per_thread * num_cpp_threads;
+      if(thr_id < pkg_1more) size_CPU = (pkg_per_thread + 1) * pkg_size_multiple;
+      else if(size_CPU != total_pkg * pkg_size_multiple && thr_id+1 == num_cpp_threads) size_CPU -= total_pkg * pkg_size_multiple; 
+      else size_CPU = pkg_per_thread * pkg_size_multiple;
 
+    }
+    
     uint64_t size = ((cpu) ? size_CPU : size_accelerator);
     uint64_t offset = ((cpu) ? size_accelerator + size_CPU*thr_id : 0);
 
@@ -108,6 +102,13 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
       // Include the file that defines the buffers used in the kernel.
       #include "buffers_sycl.cpp"
 
+      auto tpBefore = std::chrono::high_resolution_clock::now();
+      auto diffBefore = (tpBefore - tpStart).count();
+      auto tBefore = diffBefore / 1e9;
+      string aux = std::string(tBefore) + " < size : " + std::to_string(size) + " offset : " + std::to_string(offset);
+      DEVICE_DEBUG(aux);
+
+
       // Include the file that setups the buffers with the benchmark data and invokes the kernel
       #include "kernel_sycl.cpp"
 
@@ -128,8 +129,10 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto diffAfter = (tpAfter - tpStart).count();
       auto tAfter = diffAfter / 1e9;
       auto bandwidth =  size / tCompute;
-      DEVICE_DEBUG( tAfter << " > Kernel times (Total : " << tTotal << " s, Compute: " << tCompute
-                    << " s. Bandwidth: " << bandwidth << " u/s)" );
+      aux = std::to_string(tAfter) + " > Kernel times (Total : " + 
+                  std::to_string(tTotal) + " s, Compute: " + std::to_string(tCompute) + 
+                  " s. Bandwidth: " + std::to_string(bandwidth) + " u/s";
+      DEVICE_DEBUG(aux);
 
       if (cpu) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
@@ -157,7 +160,8 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
   auto diffDevice = (tpDevEnd - tpDevInit).count(); // Time elapsed since start of device process in nanoseconds
   auto tDevice = diffDevice / 1e9; // Time elapsed since start of device process in milliseconds
 
-  DEVICE_DEBUG( tSinceStart << " end [+" << tDevice << " s.]");
+  string aux = std::to_string(tSinceStart) + " end [+" + std::to_string(tDevice) + " s.]";
+  DEVICE_DEBUG(aux);
 
   (cpu) ? opts.tCPUEnd = tDevice : opts.tAccEnd = tDevice;
 }
