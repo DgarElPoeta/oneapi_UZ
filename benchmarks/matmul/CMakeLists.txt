@@ -37,7 +37,6 @@ endif()
 
 
 set(EMULATOR_TARGET ${TARGET_NAME}.fpga_emu)
-set(SIMULATOR_TARGET ${TARGET_NAME}.fpga_sim)
 set(FPGA_TARGET ${TARGET_NAME}.fpga)
 
 
@@ -48,8 +47,6 @@ set(FPGA_TARGET ${TARGET_NAME}.fpga)
 #    For this reason, FPGA backend flags must be passed as link flags in CMake.
 set(EMULATOR_COMPILE_FLAGS "-fintelfpga -DFPGA_EMULATOR")
 set(EMULATOR_LINK_FLAGS "-fintelfpga")
-set(SIMULATOR_COMPILE_FLAGS "-fintelfpga -Xssimulation -DFPGA_SIMULATOR")
-set(SIMULATOR_LINK_FLAGS "-fintelfpga -Xssimulation -Xsghdl -Xstarget=${FPGA_DEVICE} ${USER_HARDWARE_FLAGS}")
 set(HARDWARE_COMPILE_FLAGS "-fintelfpga")
 set(HARDWARE_LINK_FLAGS "-fintelfpga")
 set(FPGA_FLAGS "-fintelfpga -Xshardware -Xstarget=${FPGA_DEVICE} ${USER_HARDWARE_FLAGS}")
@@ -98,19 +95,6 @@ set_target_properties(${EMULATOR_TARGET} PROPERTIES COMPILE_FLAGS "${EMULATOR_CO
 set_target_properties(${EMULATOR_TARGET} PROPERTIES LINK_FLAGS "${EMULATOR_LINK_FLAGS}")
 target_link_libraries(${EMULATOR_TARGET} FPGA_EMU_KERNEL CPU_KERNEL)
 add_custom_target(fpga_emu DEPENDS ${EMULATOR_TARGET})
-
-###############################################################################
-### FPGA Simulator
-###############################################################################
-# To compile in a single command:
-#    icpx -fsycl -fintelfpga -Xssimulation -Xsghdl -Xstarget=<FPGA_DEVICE> -DFPGA_SIMULATOR <file>.cpp -o <file>.fpga_sim
-# CMake executes:
-#    [compile] icpx -fsycl -fintelfpga -Xssimulation -DFPGA_SIMULATOR -o <file>.cpp.o -c <file>.cpp
-#    [link]    icpx -fsycl -fintelfpga -Xssimulation -Xsghdl -Xstarget=<FPGA_DEVICE> <file>.cpp.o -o <file>.fpga_sim
-add_executable(${SIMULATOR_TARGET} EXCLUDE_FROM_ALL ${SOURCE_FILE})
-set_target_properties(${SIMULATOR_TARGET} PROPERTIES COMPILE_FLAGS "${SIMULATOR_COMPILE_FLAGS}")
-set_target_properties(${SIMULATOR_TARGET} PROPERTIES LINK_FLAGS "${SIMULATOR_LINK_FLAGS}")
-add_custom_target(fpga_sim DEPENDS ${SIMULATOR_TARGET})
 
 ###############################################################################
 ### Generate Report

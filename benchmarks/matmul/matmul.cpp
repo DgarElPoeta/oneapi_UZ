@@ -56,10 +56,11 @@ bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vecto
 
   constexpr float threshold = 0.00001;
 
-  #pragma omp parallel for
+  #pragma omp parallel
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < N; ++j) {
       ptype sum = 0;
+      #pragma omp parallel for reduction(+:sum)
       for(size_t k = 0; k < N; ++k){
         sum += a[i * N + k] * b[k * N + j];
       }
@@ -67,14 +68,15 @@ bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vecto
     }
   }
 
+  #pragma omp parallel
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < N; ++j) {
       const auto kernel_value = c[i * N + j];
       const auto host_value = c2[i * N + j];
       const auto difference = (kernel_value >= host_value) ? kernel_value - host_value : host_value - kernel_value;
       if (difference > threshold) {
-        std::cerr << "VERIFICATION FAILED for element " << i << "," << j << ": |" << kernel_value 
-                  << "-" << host_value << "| = " << difference << " = " << threshold << "\n";
+        std::cerr << "VERIFICATION FAILED for element (" << i << "," << j << ")\n\tThe next statement isn't true: |kernel_value - host_value| < threshold\n\t-> |" << kernel_value 
+                  << "-" << host_value << "| = " << difference << " > " << threshold << "\n";
         verification_passed = false;
         break;
       }
@@ -156,6 +158,10 @@ int main(int argc, char *argv[]) {
   char *check_str = getenv("CHECK"); // string with the check value
   bool check = (check_str != NULL && std::string(check_str) == "y"); // Result verification activated(true) or deactivated(false)
 
+  // PRINT environment variable
+  char *print_str = getenv("PRINT"); // string with the print value
+  bool print = (print_str != NULL && std::string(print_str) == "y"); // Print problem data activated(true) or deactivated(false)
+
   // Processing capabilities of CPU and Accelerator. Used in HGuided Algorithm
   uint32_t min_multiplier[2] = {1, 1};
 
@@ -214,8 +220,10 @@ int main(int argc, char *argv[]) {
 
   opts.pTotalSize = N;
 
-  opts.pWork = 0;
-  opts.pPkg = 0;
+  uint64_t pWork = 0;
+  uint64_t pPkg = 0;
+  opts.pWork = &pWork;
+  opts.pPkg = &pPkg;
 
   opts.tpStart = tpStart;
 
@@ -333,15 +341,15 @@ int main(int argc, char *argv[]) {
   auto tScheduler = diffScheduler / 1e9;
   
   // Execution summary
-  std::cout << "\n\n\n";
+  std::cout << "\n\n";
   std::cout << "---------------------------------------------------------------------------------\n";
-  std::cout << "Execution summary\n";
-  std::cout << "\n";
+  std::cout << "EXECUTION SUMMARY\n";
+  std::cout << "\n\n";
 
   // Type of benchamrk
   std::cout << "Benchmark: matmul\n";
-  std::cout << "Matrices size: " << N << "," << N << "\n";
-  std::cout << "Problem size: " << N << ". (an entire row is considered the work item)\n";
+  std::cout << "Matrices size: " << N << " X " << N << "\n";
+  std::cout << "Problem size: " << N << ". (an entire row is considered the work unit)\n";
   std::cout << "\n";
 
   // Type of scheduler
@@ -391,7 +399,7 @@ int main(int argc, char *argv[]) {
   
   std::cout << "Time spent on load scheduler: " << tScheduler << " s\n";
   std::cout << "Total work packages: " << opts.wPkgsCPU.size() + opts.wPkgsAcc.size() << "\n";
-  std::cout << "\n";
+  std::cout << "\n\n";
 
   // Accelerator device
   if (mode == Mode::GPU || mode == Mode::FPGA || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
@@ -411,7 +419,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  std::cout << ("\n");
+  std::cout << ("\n\n");
 
   // CPU device
   if (mode == Mode::CPU || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
@@ -438,13 +446,14 @@ int main(int argc, char *argv[]) {
       std::cout << "Verification completed: success\n";
     } else {
       std::cout << "Verification completed: failure\n";
-      print_mat("A", opts.pData.a, N);
-      print_mat("B", opts.pData.b, N);
-      print_mat("C", opts.pData.c, N);
     }
   }
 
-  //cout << "Output values: " << c_ptr[0] << "..." << c_ptr[matadd.size - 1] << "\n";
+  if(print){
+    print_mat("A", opts.pData.a, N);
+    print_mat("B", opts.pData.b, N);
+    print_mat("C", opts.pData.c, N);
+  }
 
   std::cout << "---------------------------------------------------------------------------------\n";
   return 0;

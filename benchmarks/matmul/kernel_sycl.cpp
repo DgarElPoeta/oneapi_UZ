@@ -32,7 +32,7 @@ sycl::nd_range<2> size_range(range_gws, range_lws);
 // Get the offset pointers values
 
 ptype* a = opts.pData.a.data() + offset*N;
-ptype* b = opts.pData.b.data() + offset*N;
+ptype* b = opts.pData.b.data();
 ptype* c = opts.pData.c.data() + offset*N;
 
 // Create the buffers
