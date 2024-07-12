@@ -46,29 +46,51 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
     float cpu_prop = opts.cpuProp;
     uint64_t pkg_size_multiple = opts.sizeMultiple;
 
-    uint64_t size_accelerator = total_size * (1 - cpu_prop);
+    uint64_t size_accelerator = total_size * (1.0f - cpu_prop);
     size_accelerator = (cpu_prop == 0.0f) ? total_size : (size_accelerator / pkg_size_multiple) * pkg_size_multiple;
     uint64_t size_CPU = total_size - size_accelerator;
 
     uint32_t num_cpp_threads = opts.numCppThreads;
-    uint64_t eThread = (size_CPU / num_cpp_threads < pkg_size_multiple) ? num_cpp_threads : size_CPU / pkg_size_multiple;
-    if(eThread < num_cpp_threads){
-      size_CPU = (thr_id + 1 == eThread) ? size_CPU - (eThread-1) * pkg_size_multiple : pkg_size_multiple;
+    uint64_t eThread = ((size_CPU / num_cpp_threads) < pkg_size_multiple) ?  size_CPU / pkg_size_multiple : num_cpp_threads;
+
+    uint64_t offset_CPU = size_accelerator;
+
+    if(eThread == 0 && thr_id == 0){
+      size_CPU = total_size;
+      offset_CPU = 0;
+    }
+    else if(eThread < num_cpp_threads){
+      if(thr_id + 1 == eThread && size_CPU != eThread * pkg_size_multiple){
+        size_CPU = size_CPU - eThread * pkg_size_multiple;
+        offset_CPU += eThread * pkg_size_multiple;
+      }
+      else if(thr_id < eThread){
+        size_CPU = pkg_size_multiple;
+        offset_CPU += thr_id * pkg_size_multiple;
+      }
+      else size_CPU = 0;
     }
     else{
       uint64_t total_pkg = size_CPU / pkg_size_multiple;
       uint64_t pkg_per_thread = total_pkg / num_cpp_threads;
       uint64_t pkg_1more = total_pkg - pkg_per_thread * num_cpp_threads;
-      if(thr_id < pkg_1more) size_CPU = (pkg_per_thread + 1) * pkg_size_multiple;
-      else if(size_CPU != total_pkg * pkg_size_multiple && thr_id+1 == num_cpp_threads) size_CPU -= total_pkg * pkg_size_multiple; 
-      else size_CPU = pkg_per_thread * pkg_size_multiple;
+      if(thr_id < pkg_1more){
+        size_CPU = (pkg_per_thread + 1) * pkg_size_multiple;
+        offset_CPU += thr_id * (pkg_per_thread + 1) * pkg_size_multiple;
+      }
+      else if(size_CPU != total_pkg * pkg_size_multiple && thr_id+1 == num_cpp_threads){
+        size_CPU -= (total_pkg - pkg_per_thread) * pkg_size_multiple;
+        offset_CPU += (total_pkg - pkg_per_thread) * pkg_size_multiple;
+      }
+      else{
+        size_CPU = pkg_per_thread * pkg_size_multiple;
+        offset_CPU += pkg_1more * pkg_size_multiple + thr_id * pkg_per_thread * pkg_size_multiple;
+      }
 
     }
     
     uint64_t size = ((cpu) ? size_CPU : size_accelerator);
-    uint64_t offset = ((cpu) ? size_accelerator + size_CPU*thr_id : 0);
-
-    if(cpu && thr_id+1 == num_cpp_threads && offset+size_CPU != total_size) size = total_size - offset;
+    uint64_t offset = ((cpu) ? offset_CPU: 0);
 
     uint64_t wgs = opts.wgs;
 
@@ -79,25 +101,6 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
       size_t CK = 0; // Index of the current kernel
       constexpr size_t num_kernels = 1; // Total number of kernels that can be active at the same time
       sycl::event submit_event[num_kernels];
-      /*
-      #if BENCHMARK_MATADD == 1 || BENCHMARK_MATMUL == 1
-        std::unique_ptr<sycl::buffer<ptype, 2>> buf_a[1];
-        std::unique_ptr<sycl::buffer<ptype, 2>> buf_b[1];
-        std::unique_ptr<sycl::buffer<ptype, 2>> buf_c[1];
-      #elif BENCHMARK_RAP == 1
-        std::unique_ptr<sycl::buffer<ptype, 1>> buf_a[1];
-        std::unique_ptr<sycl::buffer<ptype, 1>> buf_b[1];
-        std::unique_ptr<sycl::buffer<ptype, 1>> buf_func[1];
-      #elif BENCHMARK_NBODY == 1
-        std::unique_ptr<sycl::buffer<ptype, 1>> buf_pos_in[1];
-        std::unique_ptr<sycl::buffer<ptype, 1>> buf_vel_in[1];
-        std::unique_ptr<sycl::buffer<ptype, 1>> buf_pos_out[1];
-        std::unique_ptr<sycl::buffer<ptype, 1>> buf_vel_out[1];
-      #elif BENCHMARK_GAUSSIAN == 1
-        std::unique_ptr<sycl::buffer<uchar4, 1>> buf_input[1];
-        std::unique_ptr<sycl::buffer<float, 1>> buf_filterWeight[1];
-        std::unique_ptr<sycl::buffer<uchar4, 1>> buf_blurred[1];
-      #endif*/
       
       // Include the file that defines the buffers used in the kernel.
       #include "buffers_sycl.cpp"
@@ -105,7 +108,7 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tpBefore = std::chrono::high_resolution_clock::now();
       auto diffBefore = (tpBefore - tpStart).count();
       auto tBefore = diffBefore / 1e9;
-      string aux = std::string(tBefore) + " < size : " + std::to_string(size) + " offset : " + std::to_string(offset);
+      string aux = std::to_string(tBefore) + " < size : " + std::to_string(size) + " offset : " + std::to_string(offset);
       DEVICE_DEBUG(aux);
 
 

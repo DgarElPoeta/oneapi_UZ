@@ -56,57 +56,36 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
     uint64_t sent_kernels = 0; // Total number of kernels that have been sent
     uint64_t active_kernels = 0; // Number of active kernels
     sycl::event submit_event[num_kernels];
-    /*
-    #if BENCHMARK_MATADD == 1 || BENCHMARK_MATMUL == 1
-      std::unique_ptr<sycl::buffer<ptype, 2>> buf_a[num_buffers];
-      std::unique_ptr<sycl::buffer<ptype, 2>> buf_b[num_buffers];
-      std::unique_ptr<sycl::buffer<ptype, 2>> buf_c[num_buffers];
-    #elif BENCHMARK_RAP == 1
-      std::unique_ptr<sycl::buffer<ptype, 1>> buf_a[num_buffers];
-      std::unique_ptr<sycl::buffer<ptype, 1>> buf_b[num_buffers];
-      std::unique_ptr<sycl::buffer<ptype, 1>> buf_func[num_buffers];
-    #elif BENCHMARK_NBODY == 1
-      std::unique_ptr<sycl::buffer<ptype, 1>> buf_pos_in[num_buffers];
-      std::unique_ptr<sycl::buffer<ptype, 1>> buf_vel_in[num_buffers];
-      std::unique_ptr<sycl::buffer<ptype, 1>> buf_pos_out[num_buffers];
-      std::unique_ptr<sycl::buffer<ptype, 1>> buf_vel_out[num_buffers];
-    #elif BENCHMARK_GAUSSIAN == 1
-      std::unique_ptr<sycl::buffer<uchar4, 1>> buf_input[num_buffers];
-      std::unique_ptr<sycl::buffer<float, 1>> buf_filterWeight[num_buffers];
-      std::unique_ptr<sycl::buffer<uchar4, 1>> buf_blurred[num_buffers];
-    #else
-      num_buffers = 1;
-    #endif*/
 
+    // Include the file that defines the buffers used in the kernels.
     #include "buffers_sycl.cpp"
     
     uint64_t pkgdevid = 0;
 
-    std::vector<uint64_t> sizeV(CK), offsetV(CK), pkgV(CK);
+    std::vector<uint64_t> sizeV(num_kernels), offsetV(num_kernels), pkgV(num_kernels);
     while (work) {
       uint64_t size = 0;
       uint64_t offset = 0;
       uint64_t pkg = 0;
       {
         std::lock_guard<std::mutex> lk(opts.mWork);
-        uint64_t rest_size = opts.pTotalSize - opts.pWork;
-        pkg = opts.pPkg;
+        uint64_t pWork = *(opts.pWork);
+        uint64_t rest_size = opts.pTotalSize - pWork;
+        pkg = *(opts.pPkg);
         
         if (rest_size > 0) {
-          offset = opts.pWork;
+          offset = pWork;
           if (rest_size >= pkg_size) {
             size = pkg_size;
-            opts.pWork += pkg_size;
           } else {
             size = rest_size;
             work = false;
           }
-          opts.pWork += size;
-          opts.pPkg++;
-
+          *(opts.pWork) += size;
+          pkgV[CK] = pkg;
+          *(opts.pPkg) = pkg+1;
           sizeV[CK] = size;
           offsetV[CK] = offset;
-          pkgV[CK] = pkg;
         } else {
           work = false;
           continue;
@@ -116,7 +95,7 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tpBefore = std::chrono::high_resolution_clock::now();
       auto diffBefore = (tpBefore - tpStart).count();
       auto tBefore = diffBefore / 1e9;
-      string aux = std::string(tBefore) + " < [" + std::to_string(pkg) + "] (" + std::to_string(pkgdevid) + ") size : " + std::to_string(size) + " offset : " + std::to_string(offset);
+      string aux = std::to_string(tBefore) + " < [" + std::to_string(pkg) + "] (" + std::to_string(pkgdevid) + ") size : " + std::to_string(size) + " offset : " + std::to_string(offset);
       DEVICE_DEBUG(aux);
 
       // Include the file that setups the buffers with the benchmark data and invokes the kernel

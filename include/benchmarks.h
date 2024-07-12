@@ -17,7 +17,7 @@
 
 #include <chrono>
 #include <array>
-#include <mutex>
+#include <shared_mutex>
 #include <condition_variable>
 #include <string>
 #include <thread>
@@ -131,10 +131,10 @@ template <typename T> struct Options {
 
   // Sizes of the problem. Used in Dynamic and HGuided Algorithm
   uint64_t pTotalSize; // Total size of the problem
-  uint64_t pWork; // Size of the problem solved at the moment
+  uint64_t* pWork; // Size of the problem solved at the moment
 
   // Number of packages solved at the moment
-  uint64_t pPkg;
+  uint64_t* pPkg;
 
   // Benchmark start timepoint
   std::chrono::high_resolution_clock::time_point tpStart;
@@ -159,7 +159,7 @@ template <typename T> struct Options {
 
   sycl::queue gpuQ; // for usm
 
-  Options() : usm(false), wgs(128), sizeMultiple(wgs){
+  Options() : usm(false), wgs(128), sizeMultiple(wgs),mWork(),mCPU(){
   }
   void
   saveWorkPackages(bool cpu, uint64_t offset, uint64_t size, double tCompute)
