@@ -57,16 +57,18 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
 
     if(eThread == 0 && thr_id == 0){
       size_CPU = total_size;
-      offset_CPU = 0;
+      *(opts.pPkgCPU) = 1;
     }
     else if(eThread < num_cpp_threads){
       if(thr_id + 1 == eThread && size_CPU != eThread * pkg_size_multiple){
         size_CPU = size_CPU - eThread * pkg_size_multiple;
         offset_CPU += eThread * pkg_size_multiple;
+        *(opts.pPkgCPU) = eThread+1;
       }
       else if(thr_id < eThread){
         size_CPU = pkg_size_multiple;
         offset_CPU += thr_id * pkg_size_multiple;
+        if(thr_id == 0) *(opts.pPkgCPU) = eThread;
       }
       else size_CPU = 0;
     }
@@ -86,7 +88,12 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
         size_CPU = pkg_per_thread * pkg_size_multiple;
         offset_CPU += pkg_1more * pkg_size_multiple + thr_id * pkg_per_thread * pkg_size_multiple;
       }
+      if(thr_id == 0) *(opts.pPkgCPU) = num_cpp_threads;
 
+    }
+    if(!cpu){
+      if(size_accelerator == 0) *(opts.pPkgAcc) = 0;
+      else *(opts.pPkgAcc) = 1;
     }
     
     uint64_t size = ((cpu) ? size_CPU : size_accelerator);
@@ -141,12 +148,12 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
         opts.tComputeKernelCPU += tCompute;
         opts.tSubmitKernelCPU += tSubmit;
-        opts.saveWorkPackages(cpu, offset, size, tCompute);
+        opts.saveWorkPackages(cpu, thr_id, offset, size, tCompute);
         opts.workSizeCPU += size;
       } else {
         opts.tComputeKernelAcc += tCompute;
         opts.tSubmitKernelAcc += tSubmit;
-        opts.saveWorkPackages(cpu, offset, size, tCompute);
+        opts.saveWorkPackages(cpu, 0, offset, size, tCompute);
         opts.workSizeAcc += size;
       }
       

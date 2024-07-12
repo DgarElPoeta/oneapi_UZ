@@ -135,6 +135,8 @@ template <typename T> struct Options {
 
   // Number of packages solved at the moment
   uint64_t* pPkg;
+  uint64_t* pPkgCPU;
+  uint64_t* pPkgAcc;
 
   // Benchmark start timepoint
   std::chrono::high_resolution_clock::time_point tpStart;
@@ -161,15 +163,41 @@ template <typename T> struct Options {
 
   Options() : usm(false), wgs(128), sizeMultiple(wgs),mWork(),mCPU(){
   }
+
+  void setupWorkPkgs(){
+    
+    constexpr size_t dim = 20;
+    size_t pCPU = dim, pAcc = dim;
+    if(algo == Algo::Static){
+      pCPU = 1 * numCppThreads;
+      pAcc = 1;
+      wPkgsCPU.reserve(pCPU);
+      wPkgsAcc.reserve(pAcc);
+    }
+    else{
+      wPkgsCPU.reserve(120);
+      wPkgsAcc.reserve(120);
+    }
+    wPkgsCPU.clear();
+    wPkgsAcc.clear();
+    wPkgsCPU.resize(pCPU);
+    wPkgsAcc.resize(pAcc);
+    workSizeCPU = 0;
+    workSizeAcc = 0;
+  }
+
   void
-  saveWorkPackages(bool cpu, uint64_t offset, uint64_t size, double tCompute)
+  saveWorkPackages(bool cpu, uint64_t index, uint64_t offset, uint64_t size, double tCompute)
   {
     auto tp = std::chrono::high_resolution_clock::now();
     double tSinceStart = (tp - tpStart).count() / 1e9;
     if (cpu){
-      wPkgsCPU.push_back(WorkPackages(offset, size, tCompute, tSinceStart));
+      if(index >= wPkgsCPU.size()) wPkgsCPU.resize(wPkgsCPU.size() + 20);
+      wPkgsCPU[index] = WorkPackages(offset, size, tCompute, tSinceStart);
     } else {
-      wPkgsAcc.push_back(WorkPackages(offset, size, tCompute, tSinceStart));
+
+      if (index >= wPkgsAcc.size()) wPkgsAcc.resize(wPkgsAcc.size() + 20);
+      wPkgsAcc[index] = WorkPackages(offset, size, tCompute, tSinceStart);
     }
   }
 };

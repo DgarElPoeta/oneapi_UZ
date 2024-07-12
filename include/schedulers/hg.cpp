@@ -63,18 +63,20 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
     // Include the file that defines the buffers used in the kernels.
     #include "buffers_sycl.cpp"
 
-    uint64_t pkgdevid = 0;
-
-    std::vector<uint64_t> sizeV(num_kernels), offsetV(num_kernels), pkgV(num_kernels);
+    std::vector<uint64_t> sizeV(num_kernels), offsetV(num_kernels), pkgDevV(num_kernels), pkgV(num_kernels);
     while (work) {
       uint64_t size = 0;
       uint64_t offset = 0;
       uint64_t pkg = 0;
+      uint64_t pkgdevid = 0;
       {
         std::lock_guard<std::mutex> lk(opts.mWork);
         uint64_t pWork = *(opts.pWork);
         uint64_t rest_size = opts.pTotalSize - pWork;
         pkg = *(opts.pPkg);
+        if(cpu) pkgdevid = *(opts.pPkgCPU);
+        else pkgdevid = *(opts.pPkgAcc);
+        
         if (rest_size > 0) {
           offset = pWork;
           if (rest_size >= min_split) {
@@ -96,7 +98,9 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
           *(opts.pWork) += size;
           pkgV[CK] = pkg;
           *(opts.pPkg) = pkg+1;
-
+          pkgDevV[CK] = pkgdevid;
+          if (cpu) *(opts.pPkgCPU) = pkgdevid+1;
+          else *(opts.pPkgAcc) = pkgdevid+1;
           sizeV[CK] = size;
           offsetV[CK] = offset;
         } else {
@@ -115,8 +119,6 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
       #include "kernel_sycl.cpp"
       
       active_kernels++; // Increments the number of active buffers
-      
-      pkgdevid++; // Increments the package device id
 
       if(++CK == num_kernels) CK = 0; // Increments the buffer index
 
@@ -150,12 +152,12 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
         opts.tComputeKernelCPU += tCompute;
         opts.tSubmitKernelCPU += tSubmit;
-        opts.saveWorkPackages(cpu, offsetV[CK], sizeV[CK], tCompute);
+        opts.saveWorkPackages(cpu, pkgDevV[CK], offsetV[CK], sizeV[CK], tCompute);
         opts.workSizeCPU += sizeV[CK];
       } else {
         opts.tComputeKernelAcc += tCompute;
         opts.tSubmitKernelAcc += tSubmit;
-        opts.saveWorkPackages(cpu, offsetV[CK], sizeV[CK], tCompute);
+        opts.saveWorkPackages(cpu, pkgDevV[CK], offsetV[CK], sizeV[CK], tCompute);
         opts.workSizeAcc += sizeV[CK];
       }
 
@@ -167,6 +169,7 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
     for(size_t i=0; i<active_kernels; i++){
       size_t eventIndex = (CK+i) % num_kernels;
       uint64_t size = sizeV[eventIndex], offset = offsetV[eventIndex];
+      uint64_t pkgdevid = pkgDevV[eventIndex];
       submit_event[eventIndex].wait();
       auto tpAfter = std::chrono::high_resolution_clock::now();
 
@@ -191,12 +194,12 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
         opts.tComputeKernelCPU += tCompute;
         opts.tSubmitKernelCPU += tSubmit;
-        opts.saveWorkPackages(cpu, offset, size, tCompute);
+        opts.saveWorkPackages(cpu, pkgdevid, offset, size, tCompute);
         opts.workSizeCPU += size;
       } else {
         opts.tComputeKernelAcc += tCompute;
         opts.tSubmitKernelAcc += tSubmit;
-        opts.saveWorkPackages(cpu, offset, size, tCompute);
+        opts.saveWorkPackages(cpu, pkgdevid, offset, size, tCompute);
         opts.workSizeAcc += size;
       }
     }
