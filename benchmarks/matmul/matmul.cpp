@@ -33,10 +33,13 @@ void process(bool cpu, Options<T>& opts, uint32_t thr_id) {
 
 int usage() {
   std::cout
-      << "usage: <cpu|gpu|fpgaemu|fpgahw|cpu_gpu|cpu_fpgaemu|cpu_fpgahw> <static|dynamic|hguided> <num pkgs (dyn)|cpu proportion (st|hg)> <side size> [num_cpp_threads]\n"
-      << "DEBUG=y\n"
-      << "CHECK=y\n"
-      << "MIN_PKG_MULTIPLIER=1,1 (cpu,acc)\n";
+      << "usage: <cpu|gpu|fpga|cpu_gpu|cpu_fpga> <static|dynamic|hguided> <num pkgs (dyn)|cpu proportion (st|hg)> <problem size> [num_cpp_threads]\n"
+      << "Environment variables:\n"
+      << "DEBUG=y   to print messages during execution\n"
+      << "CHECK=y   to evaluate the correctnes of the results\n"
+      << "PRINT=y   to print the the data of the problem\n"
+      << "MIN_PKG_MULTIPLIER=<uint>,<uint> (cpu,acc)   to specify the multiplier for the min package of each device in HGuided algorithm\n"
+      << "K=<float>   to specify the K value in HGuided algorithm\n";
   return 1;
 }
 
@@ -44,9 +47,9 @@ void print_mat(std::string name, std::vector<ptype>& m, uint64_t N) {
   std::cout << name << "\n";
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < N; ++j) {
-      printf("%f ",m[i * N + j]);
+      std::cout << m[i * N + j] << " ";
     }
-    printf("\n");
+    std::cout << "\n";
   }
 }
 
