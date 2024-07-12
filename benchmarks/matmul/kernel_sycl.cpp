@@ -21,7 +21,7 @@ if(wgs > N) {
 /*
  * We define the range of the local work size.
  */
-sycl::range<2> range_lws(1,N);
+sycl::range<2> range_lws(1,wgs);
 
 /*
  * We define the nd_range of the problem. It combines the range of the global work size and 

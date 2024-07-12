@@ -41,7 +41,7 @@ int usage() {
 }
 
 void print_mat(std::string name, std::vector<ptype>& m, uint64_t N) {
-  printf("%s:\n", name.c_str());
+  std::cout << name << "\n";
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < N; ++j) {
       printf("%f ",m[i * N + j]);
@@ -73,7 +73,8 @@ bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vecto
       const auto host_value = c2[i * N + j];
       const auto difference = (kernel_value >= host_value) ? kernel_value - host_value : host_value - kernel_value;
       if (difference > threshold) {
-        fprintf(stderr, "VERIFICATION FAILED for element %ld,%ld: |%f-%f| = %f > %f = threshold\n", i, j, kernel_value, host_value, difference, threshold);
+        std::cerr << "VERIFICATION FAILED for element " << i << "," << j << ": |" << kernel_value 
+                  << "-" << host_value << "| = " << difference << " = " << threshold << "\n";
         verification_passed = false;
         break;
       }
@@ -263,7 +264,7 @@ int main(int argc, char *argv[]) {
     opts.tpCPUStart.push_back(timePoint);
 
     // Thread vector
-    std::vector<std::thread> vecOfThreads;
+    std::vector<std::thread> vecOfThreads(num_cpp_threads - 1);
 
     // Creation of CPU threads
     for(size_t i=1; i<num_cpp_threads; i++){
@@ -273,7 +274,7 @@ int main(int argc, char *argv[]) {
       opts.tpCPUStart.push_back(timePoint);
 
       // Create thread with CPU scheduler process
-      vecOfThreads.push_back(std::thread(process<Matmul>, true, std::ref(opts), i));
+      vecOfThreads[i-1] = std::thread(process<Matmul>, true, std::ref(opts), i);
     }
 
     // Start time of CPU actual thread
@@ -300,7 +301,7 @@ int main(int argc, char *argv[]) {
   } else {
     
     // Thread vector
-    std::vector<std::thread> vecOfThreads;
+    std::vector<std::thread> vecOfThreads(num_cpp_threads);
 
     // Creation of CPU threads
     for(size_t i=0; i<num_cpp_threads; i++){
@@ -310,7 +311,7 @@ int main(int argc, char *argv[]) {
       opts.tpCPUStart.push_back(timePoint);
 
       // Create thread with CPU scheduler process
-      vecOfThreads.push_back(std::thread(process<Matmul>, true, std::ref(opts), i));
+      vecOfThreads[i] = std::thread(process<Matmul>, true, std::ref(opts), i);
     }
 
     // Start time of accelerator scheduler process
@@ -335,13 +336,13 @@ int main(int argc, char *argv[]) {
   std::cout << "\n\n\n";
   std::cout << "---------------------------------------------------------------------------------\n";
   std::cout << "Execution summary\n";
-  std::cout << "\n\n";
+  std::cout << "\n";
 
   // Type of benchamrk
   std::cout << "Benchmark: matmul\n";
   std::cout << "Matrices size: " << N << "," << N << "\n";
   std::cout << "Problem size: " << N << ". (an entire row is considered the work item)\n";
-  std::cout << "\n\n";
+  std::cout << "\n";
 
   // Type of scheduler
   std::cout << "Scheduler: ";
@@ -356,7 +357,7 @@ int main(int argc, char *argv[]) {
     std::cout << " K: " << opts.K << "\n";
     std::cout << " minChunkMultiplier (gpu,cpu): (" << opts.minMultiplierAcc << "," << opts.minMultiplierCPU << ")\n";
   }
-  std::cout << "\n\n";
+  std::cout << "\n";
 
   // Heterogeneus execution mode
   std::cout << "Mode: ";
@@ -385,11 +386,12 @@ int main(int argc, char *argv[]) {
 #endif
       break;
   }
-  std::cout << "\n\n";
+  std::cout << "\n";
 
   
   std::cout << "Time spent on load scheduler: " << tScheduler << " s\n";
   std::cout << "Total work packages: " << opts.wPkgsCPU.size() + opts.wPkgsAcc.size() << "\n";
+  std::cout << "\n";
 
   // Accelerator device
   if (mode == Mode::GPU || mode == Mode::FPGA || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
@@ -399,16 +401,17 @@ int main(int argc, char *argv[]) {
     std::cout << "\tSubmitting and waiting for resources availability: " << opts.tSubmitKernelAcc << " s\n";
     std::cout << "\tComputing: " << opts.tComputeKernelAcc << " s\n";
     std::cout << "Time spent on device: " << opts.tAccEnd << " s\n";
-
-    std::cout << "Work packages summary:\n";
-    uint32_t i = 1;
-    for (auto pkg : opts.wPkgsAcc) {
-      std::cout << "\tPackage " << i++ << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
-                << " s, time since start of program: " << pkg.tSinceStart << " s\n";
+    if (opts.wPkgsAcc.size() > 0){
+      std::cout << "Work packages summary:\n";
+      uint32_t i = 1;
+      for (auto pkg : opts.wPkgsAcc) {
+        std::cout << "\tPackage " << i++ << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
+                  << " s, time since start of program: " << pkg.tSinceStart << " s\n";
+      }
     }
   }
 
-  std::cout << ("\n\n");
+  std::cout << ("\n");
 
   // CPU device
   if (mode == Mode::CPU || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
@@ -418,21 +421,23 @@ int main(int argc, char *argv[]) {
     std::cout << "\tSubmitting and waiting for resources availability: " << opts.tSubmitKernelCPU << " s\n";
     std::cout << "\tComputing: " << opts.tComputeKernelCPU << " s\n";
     std::cout << "Time spent on device: " << opts.tCPUEnd << " s\n";
-
-    std::cout << "Work packages summary:\n";
-    uint32_t i = 1;
-    for (auto pkg : opts.wPkgsCPU) {
-      std::cout << "\tPackage " << i++ << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
-                << " s, time since start of program: " << pkg.tSinceStart << " s\n";
+    if (opts.wPkgsCPU.size() > 0){
+      std::cout << "Work packages summary:\n";
+      uint32_t i = 1;
+      for (auto pkg : opts.wPkgsCPU) {
+        std::cout << "\tPackage " << i++ << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
+                  << " s, time since start of program: " << pkg.tSinceStart << " s\n";
+      }
     }
   }
-  std::cout << "\n\n";
+  std::cout << "\n";
 
   if (check) {
+    std::cout << "Verificating the correctness of the results...\n";
     if (verify(N, opts.pData.a, opts.pData.b, opts.pData.c)) {
-      std::cout << "Success\n";
+      std::cout << "Verification completed: success\n";
     } else {
-      std::cout << "Failure\n";
+      std::cout << "Verification completed: failure\n";
       print_mat("A", opts.pData.a, N);
       print_mat("B", opts.pData.b, N);
       print_mat("C", opts.pData.c, N);
@@ -440,5 +445,7 @@ int main(int argc, char *argv[]) {
   }
 
   //cout << "Output values: " << c_ptr[0] << "..." << c_ptr[matadd.size - 1] << "\n";
+
+  std::cout << "---------------------------------------------------------------------------------\n";
   return 0;
 }

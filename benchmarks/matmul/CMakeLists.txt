@@ -1,5 +1,5 @@
-set(TARGET_NAME matadd)
-set(SOURCE_FILE matadd.cpp)
+set(TARGET_NAME matmul)
+set(SOURCE_FILE matmul.cpp)
 
 #
 # SECTION 1
