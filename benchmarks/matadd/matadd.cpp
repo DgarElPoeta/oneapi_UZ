@@ -5,6 +5,8 @@
 #include "matadd.h"
 #include "benchmarks.h"
 
+#include <random>
+
 using namespace std::chrono;
 
 //typedef sycl::cl_uchar4 cl_uchar4;
@@ -248,12 +250,13 @@ int main(int argc, char *argv[]) {
   // -------------------------------------------------------------------------------------------------
   // Initialization of elements in matrices in Matadd data type of Opts with random values
 
-  srand(0);
-  auto nMax = 10;
-  auto nMin = 0;
-  for (auto i = 0; i < N*N; i++) {
-    opts.pData.a[i] = rand() % ((nMax + 1) - nMin) + nMin;
-    opts.pData.b[i] = rand() % ((nMax + 1) - nMin) + nMin;
+  constexpr ptype nMin = -10, nMax = 10;
+  std::random_device dev;
+  std::mt19937 gen(dev()); 
+  std::uniform_int_distribution<ptype> dis(nMin,nMax);
+  for (size_t i = 0; i < N*N; i++) {
+    opts.pData.a[i] = dis(gen);
+    opts.pData.b[i] = dis(gen);
   }
 
   // -------------------------------------------------------------------------------------------------
