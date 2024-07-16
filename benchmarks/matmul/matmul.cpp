@@ -1,19 +1,11 @@
 //
 // Created by radon on 17/09/20.
 //
+#include <random>
+#include <thread>
 
 #include "matmul.h"
 #include "benchmarks.h"
-
-using namespace std::chrono;
-
-//typedef sycl::cl_uchar4 cl_uchar4;
-
-inline ostream &
-operator<<(ostream &os, cl_uchar4 &t) {
-  os << "(" << (int) t.s[0] << "," << (int) t.s[1] << "," << (int) t.s[2] << "," << (int) t.s[3] << ")";
-  return os;
-}
 
 #include "schedulers/st.cpp"
 #include "schedulers/dyn.cpp"
@@ -165,11 +157,11 @@ int main(int argc, char *argv[]) {
   char *print_str = getenv("PRINT"); // string with the print value
   bool print = (print_str != NULL && std::string(print_str) == "y"); // Print problem data activated(true) or deactivated(false)
 
-  // Processing capabilities of CPU and Accelerator. Used in HGuided Algorithm
+  // Multipliers of work package size of CPU and Accelerator. Used in HGuided Algorithm
   uint32_t min_multiplier[2] = {1, 1};
 
-  // MIN_CHUNK_MULTIPLIER environment variable
-  char *multipliers_str = getenv("MIN_CHUNK_MULTIPLIER");
+  // MIN_PKG_MULTIPLIER environment variable
+  char *multipliers_str = getenv("MIN_PKG_MULTIPLIER");
   std::string multiplier("");
   if (multipliers_str != nullptr) {
     multiplier = std::string(multipliers_str);
@@ -210,8 +202,8 @@ int main(int argc, char *argv[]) {
   opts.minMultiplierCPU = min_multiplier[0];
   opts.minMultiplierAcc = min_multiplier[1];
 
-  opts.wPkgsCPU = vector<WorkPackages>();
-  opts.wPkgsAcc = vector<WorkPackages>();
+  opts.wPkgsCPU = std::vector<WorkPackages>();
+  opts.wPkgsAcc = std::vector<WorkPackages>();
 
   opts.workSizeCPU = 0;
   opts.workSizeAcc = 0;
@@ -238,7 +230,7 @@ int main(int argc, char *argv[]) {
   opts.tSubmitKernelCPU = 0;
   opts.tSubmitKernelAcc= 0;
 
-  // Initialization of Matadd data type of Opts
+  // Initialization of Matmul data type of Opts
   opts.pData = Matmul();
   opts.pData.size = N;
   opts.pData.a = std::vector<ptype>(N*N);
@@ -250,14 +242,15 @@ int main(int argc, char *argv[]) {
   
 
   // -------------------------------------------------------------------------------------------------
-  // Initialization of elements in matrices in Matadd data type of Opts with random values
+  // Initialization of elements in matrices in Matmul data type of Opts with random values
 
-  srand(0);
-  auto nMax = 10;
-  auto nMin = 0;
-  for (auto i = 0; i < N*N; i++) {
-    opts.pData.a[i] = rand() % ((nMax + 1) - nMin) + nMin;
-    opts.pData.b[i] = rand() % ((nMax + 1) - nMin) + nMin;
+  constexpr ptype nMin = -10, nMax = 10;
+  std::random_device dev;
+  std::mt19937 gen(dev()); 
+  std::uniform_int_distribution<ptype> dis(nMin,nMax);
+  for (size_t i = 0; i < N*N; i++) {
+    opts.pData.a[i] = dis(gen);
+    opts.pData.b[i] = dis(gen);
   }
 
   // -------------------------------------------------------------------------------------------------
@@ -270,9 +263,7 @@ int main(int argc, char *argv[]) {
   opts.tpSchedulerStart = timePoint;
   if (mode == Mode::CPU) {
 
-    // We reserve the first timepoint for the CPU actual thread
-    timePoint = std::chrono::high_resolution_clock::now();
-    opts.tpCPUStart.push_back(timePoint);
+    opts.tpCPUStart = std::vector<std::chrono::high_resolution_clock::time_point>(num_cpp_threads);
 
     // Thread vector
     std::vector<std::thread> vecOfThreads(num_cpp_threads - 1);
@@ -282,7 +273,7 @@ int main(int argc, char *argv[]) {
       
       // Push start time of every thread created
       timePoint = std::chrono::high_resolution_clock::now();
-      opts.tpCPUStart.push_back(timePoint);
+      opts.tpCPUStart[i] = timePoint;
 
       // Create thread with CPU scheduler process
       vecOfThreads[i-1] = std::thread(process<Matmul>, true, std::ref(opts), i);
@@ -311,6 +302,8 @@ int main(int argc, char *argv[]) {
 
   } else {
     
+    opts.tpCPUStart = std::vector<std::chrono::high_resolution_clock::time_point>(num_cpp_threads);
+
     // Thread vector
     std::vector<std::thread> vecOfThreads(num_cpp_threads);
 
@@ -319,7 +312,7 @@ int main(int argc, char *argv[]) {
 
       // Push start time of every thread created
       timePoint = std::chrono::high_resolution_clock::now();
-      opts.tpCPUStart.push_back(timePoint);
+      opts.tpCPUStart[i] = timePoint;
 
       // Create thread with CPU scheduler process
       vecOfThreads[i] = std::thread(process<Matmul>, true, std::ref(opts), i);
