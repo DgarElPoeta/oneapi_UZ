@@ -3,6 +3,7 @@
 //
 #include <random>
 #include <thread>
+#include <iostream>
 
 #include "matmul.h"
 #include "benchmarks.h"
@@ -202,12 +203,6 @@ int main(int argc, char *argv[]) {
   opts.minMultiplierCPU = min_multiplier[0];
   opts.minMultiplierAcc = min_multiplier[1];
 
-  opts.wPkgsCPU = std::vector<WorkPackages>();
-  opts.wPkgsAcc = std::vector<WorkPackages>();
-
-  opts.workSizeCPU = 0;
-  opts.workSizeAcc = 0;
-
   opts.accDeviceDesc = "";
   opts.cpuDeviceDesc = "";
   
@@ -217,8 +212,13 @@ int main(int argc, char *argv[]) {
 
   uint64_t pWork = 0;
   uint64_t pPkg = 0;
+  uint64_t pPkgCPU = 0;
+  uint64_t pPkgAcc = 0;
   opts.pWork = &pWork;
   opts.pPkg = &pPkg;
+  opts.pPkgCPU = &pPkgCPU;
+  opts.pPkgAcc = &pPkgAcc;
+
 
   opts.tpStart = tpStart;
 
@@ -229,6 +229,8 @@ int main(int argc, char *argv[]) {
   opts.tComputeKernelAcc = 0;
   opts.tSubmitKernelCPU = 0;
   opts.tSubmitKernelAcc= 0;
+
+  opts.setupWorkPkgs();
 
   // Initialization of Matmul data type of Opts
   opts.pData = Matmul();
@@ -337,16 +339,16 @@ int main(int argc, char *argv[]) {
   auto tScheduler = diffScheduler / 1e9;
   
   // Execution summary
-  std::cout << "\n\n";
+  std::cout << "\n\n\n";
   std::cout << "---------------------------------------------------------------------------------\n";
-  std::cout << "EXECUTION SUMMARY\n";
+  std::cout << "Execution summary\n";
   std::cout << "\n\n";
 
   // Type of benchamrk
-  std::cout << "Benchmark: matmul\n";
-  std::cout << "Matrices size: " << N << " X " << N << "\n";
-  std::cout << "Problem size: " << N << ". (an entire row is considered the work unit)\n";
-  std::cout << "\n";
+  std::cout << "Benchmark: matadd\n";
+  std::cout << "Matrices size: " << N << "," << N << "\n";
+  std::cout << "Problem size: " << N << ". (an entire row is considered the work item)\n";
+  std::cout << "\n\n";
 
   // Type of scheduler
   std::cout << "Scheduler: ";
@@ -361,7 +363,7 @@ int main(int argc, char *argv[]) {
     std::cout << " K: " << opts.K << "\n";
     std::cout << " minChunkMultiplier (gpu,cpu): (" << opts.minMultiplierAcc << "," << opts.minMultiplierCPU << ")\n";
   }
-  std::cout << "\n";
+  std::cout << "\n\n";
 
   // Heterogeneus execution mode
   std::cout << "Mode: ";
@@ -390,26 +392,28 @@ int main(int argc, char *argv[]) {
 #endif
       break;
   }
-  std::cout << "\n";
+  std::cout << "\n\n";
 
-  
+  std::cout << "Load scheduler summary:\n";
+  std::cout << "Time since start of program: " << (opts.tpSchedulerStart - tpStart).count() / 1e9 << " s\n";
   std::cout << "Time spent on load scheduler: " << tScheduler << " s\n";
-  std::cout << "Total work packages: " << opts.wPkgsCPU.size() + opts.wPkgsAcc.size() << "\n";
+  std::cout << "Total work packages: " << pPkgCPU + pPkgAcc << "\n";
   std::cout << "\n\n";
 
   // Accelerator device
   if (mode == Mode::GPU || mode == Mode::FPGA || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
     std::cout << "Accelerator device: " << opts.accDeviceDesc << "\n";
-    std::cout << "Number of work packages: " << opts.wPkgsAcc.size() << ", number of total work items : " << opts.workSizeAcc << "\n";
+    std::cout << "Number of work packages: " << pPkgAcc << ", number of total work items : " << opts.workSizeAcc << "\n";
     std::cout << "Time spent on kernels:\n";
     std::cout << "\tSubmitting and waiting for resources availability: " << opts.tSubmitKernelAcc << " s\n";
     std::cout << "\tComputing: " << opts.tComputeKernelAcc << " s\n";
     std::cout << "Time spent on device: " << opts.tAccEnd << " s\n";
-    if (opts.wPkgsAcc.size() > 0){
+    
+    if (pPkgAcc > 0){
       std::cout << "Work packages summary:\n";
-      uint32_t i = 1;
-      for (auto pkg : opts.wPkgsAcc) {
-        std::cout << "\tPackage " << i++ << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
+      for (size_t i = 0; i < pPkgAcc; i++) {
+        WorkPackages pkg = opts.wPkgsAcc[i];
+        std::cout << "\tPackage " << i+1 << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
                   << " s, time since start of program: " << pkg.tSinceStart << " s\n";
       }
     }
@@ -420,16 +424,17 @@ int main(int argc, char *argv[]) {
   // CPU device
   if (mode == Mode::CPU || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
     std::cout << "CPU device: " << opts.cpuDeviceDesc << "\n";
-    std::cout << "Number of work packages: " << opts.wPkgsCPU.size() << ", number of total work items : " << opts.workSizeCPU << "\n";
+    std::cout << "Number of work packages: " << pPkgCPU << ", number of total work items : " << opts.workSizeCPU << "\n";
     std::cout << "Time spent on kernels:\n";
     std::cout << "\tSubmitting and waiting for resources availability: " << opts.tSubmitKernelCPU << " s\n";
     std::cout << "\tComputing: " << opts.tComputeKernelCPU << " s\n";
     std::cout << "Time spent on device: " << opts.tCPUEnd << " s\n";
-    if (opts.wPkgsCPU.size() > 0){
+
+    if (pPkgCPU > 0){
       std::cout << "Work packages summary:\n";
-      uint32_t i = 1;
-      for (auto pkg : opts.wPkgsCPU) {
-        std::cout << "\tPackage " << i++ << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
+      for (size_t i = 0; i < pPkgCPU; i++) {
+        WorkPackages pkg = opts.wPkgsCPU[i];
+        std::cout << "\tPackage " << i+1 << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
                   << " s, time since start of program: " << pkg.tSinceStart << " s\n";
       }
     }
