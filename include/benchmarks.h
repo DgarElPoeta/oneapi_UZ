@@ -5,24 +5,11 @@
 #ifndef BENCHMARKS_H
 #define BENCHMARKS_H
 
-#include <sycl/sycl.hpp>
-//#include "defs.h"
-
-#include <iostream>
-#include <iomanip>
-#include <ctime>
-#include <sys/time.h>
-//#include <cstdlib>
-//#include "sycl_exceptions.hpp"
-
-#include <chrono>
-#include <array>
-#include <shared_mutex>
-#include <condition_variable>
 #include <string>
-#include <thread>
+#include <vector>
+#include <cstdint>
+#include <mutex>
 
-#include "io.hpp"
 
 // Types of scheduler algorithms
 enum class Algo {
@@ -114,8 +101,8 @@ template <typename T> struct Options {
   uint64_t sizeMultiple;
 
   // Work packages
-  vector<WorkPackages> wPkgsCPU; // Work packages assigned to CPU
-  vector<WorkPackages> wPkgsAcc; // Work packages assigned to Accelerator
+  std::vector<WorkPackages> wPkgsCPU; // Work packages assigned to CPU
+  std::vector<WorkPackages> wPkgsAcc; // Work packages assigned to Accelerator
   uint64_t workSizeCPU; // Work size assigned to CPU
   uint64_t workSizeAcc; // work size assigned to Accelerator
 
@@ -159,9 +146,7 @@ template <typename T> struct Options {
 
   T pData; // Benchmark data type with contains the data. Eg. Matmul, Gaussian
 
-  sycl::queue gpuQ; // for usm
-
-  Options() : usm(false), wgs(128), sizeMultiple(wgs),mWork(),mCPU(){
+  Options() : usm(false), wgs(128), sizeMultiple(wgs), mWork(), mCPU(){
   }
 
   void setupWorkPkgs(){
@@ -201,12 +186,5 @@ template <typename T> struct Options {
     }
   }
 };
-
-
-#ifdef __SYCL_DEVICE_ONLY__
-#define CONSTANT __attribute__((opencl_constant))
-#else
-#define CONSTANT
-#endif
 
 #endif //BENCHMARKS_H

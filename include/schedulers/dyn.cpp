@@ -17,7 +17,7 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
 
     if(cpu){
       q = CPU_QUEUE;
-      opts.cpuDeviceDesc = q.get_device().get_info<sycl::info::device::name>().c_str();
+      opts.cpuDeviceDesc = q.get_device().get_info<sycl::info::device::name>();
     }
     else{
       switch(opts.mode) {
@@ -33,7 +33,7 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
 #endif
           break;
       }
-      opts.accDeviceDesc = q.get_device().get_info<sycl::info::device::name>().c_str();
+      opts.accDeviceDesc = q.get_device().get_info<sycl::info::device::name>();
     }
 
     device_type = cpu ? opts.cpuDeviceDesc + " Thread " + std::to_string(thr_id) : opts.accDeviceDesc;
