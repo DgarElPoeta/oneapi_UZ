@@ -1,21 +1,12 @@
 //
 // Created by radon on 17/09/20.
 //
+#include <random>
+#include <thread>
+#include <iostream>
 
 #include "matadd.h"
 #include "benchmarks.h"
-
-#include <random>
-
-using namespace std::chrono;
-
-//typedef sycl::cl_uchar4 cl_uchar4;
-
-inline ostream &
-operator<<(ostream &os, cl_uchar4 &t) {
-  os << "(" << (int) t.s[0] << "," << (int) t.s[1] << "," << (int) t.s[2] << "," << (int) t.s[3] << ")";
-  return os;
-}
 
 #include "schedulers/st.cpp"
 #include "schedulers/dyn.cpp"
@@ -165,8 +156,8 @@ int main(int argc, char *argv[]) {
   // Processing capabilities of CPU and Accelerator. Used in HGuided Algorithm
   uint32_t min_multiplier[2] = {1, 1};
 
-  // MIN_CHUNK_MULTIPLIER environment variable
-  char *multipliers_str = getenv("MIN_CHUNK_MULTIPLIER");
+  // MIN_PKG_MULTIPLIER environment variable
+  char *multipliers_str = getenv("MIN_PKG_MULTIPLIER");
   std::string multiplier("");
   if (multipliers_str != nullptr) {
     multiplier = std::string(multipliers_str);
@@ -269,9 +260,7 @@ int main(int argc, char *argv[]) {
   opts.tpSchedulerStart = timePoint;
   if (mode == Mode::CPU) {
 
-    // We reserve the first timepoint for the CPU actual thread
-    timePoint = std::chrono::high_resolution_clock::now();
-    opts.tpCPUStart.push_back(timePoint);
+    opts.tpCPUStart = std::vector<std::chrono::high_resolution_clock::time_point>(num_cpp_threads);
 
     // Thread vector
     std::vector<std::thread> vecOfThreads(num_cpp_threads-1);
@@ -281,7 +270,7 @@ int main(int argc, char *argv[]) {
       
       // Push start time of every thread created
       timePoint = std::chrono::high_resolution_clock::now();
-      opts.tpCPUStart.push_back(timePoint);
+      opts.tpCPUStart[i] = timePoint;
 
       // Create thread with CPU scheduler process
       vecOfThreads[i-1] = std::thread(process<Matadd>, true, std::ref(opts), i);
@@ -310,6 +299,8 @@ int main(int argc, char *argv[]) {
 
   } else {
     
+    opts.tpCPUStart = std::vector<std::chrono::high_resolution_clock::time_point>(num_cpp_threads);
+
     // Thread vector
     std::vector<std::thread> vecOfThreads(num_cpp_threads);
 
@@ -318,7 +309,7 @@ int main(int argc, char *argv[]) {
 
       // Push start time of every thread created
       timePoint = std::chrono::high_resolution_clock::now();
-      opts.tpCPUStart.push_back(timePoint);
+      opts.tpCPUStart[i] = timePoint;
 
       // Create thread with CPU scheduler process
       vecOfThreads[i] = std::thread(process<Matadd>, true, std::ref(opts), i);
