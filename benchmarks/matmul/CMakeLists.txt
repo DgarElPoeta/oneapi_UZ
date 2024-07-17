@@ -68,18 +68,17 @@ set(FPGA_KERNEL fpga_kernel.a)
 add_library(FPGA_KERNEL_OBJ OBJECT ${FPGA_KERNEL_SRC})
 set_target_properties(FPGA_KERNEL_OBJ PROPERTIES COMPILE_FLAGS "${HARDWARE_COMPILE_FLAGS}")
 
+set(FPGA_IMAGE ${BENCHMARK}_fpga.a)
 set(FPGA_LINK_FLAGS "-fsycl ${FPGA_FLAGS}")
 separate_arguments(FPGA_LINK_FLAGS)
 # Custom linking command to use icpx with FPGA arguments
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/libFPGA_KERNEL.a
+add_custom_command(OUTPUT ${FPGA_IMAGE}
     COMMAND ${CMAKE_CXX_COMPILER} ${FPGA_LINK_FLAGS} -fsycl-link=image -o ${CMAKE_BINARY_DIR}/libFPGA_KERNEL.a $<TARGET_OBJECTS:FPGA_KERNEL_OBJ> 
     DEPENDS FPGA_KERNEL_OBJ
     COMMENT "Linking FPGA_KERNEL with icpx"
 )
 
-add_custom_target(FPGA_KERNEL
-    DEPENDS ${CMAKE_BINARY_DIR}/libFPGA_KERNEL.a
-)
+add_custom_target(fpga_image DEPENDS ${FPGA_IMAGE})
 
 
 ###############################################################################

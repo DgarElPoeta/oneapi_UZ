@@ -47,16 +47,14 @@ void print_mat(std::string name, std::vector<ptype>& m, uint64_t N) {
 }
 
 bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vector<ptype>& c) {
-  std::vector<ptype> c2(N * N, 0);
+  std::vector<ptype> c2(N * N, 0.0);
   bool verification_passed = true;
 
-  constexpr float threshold = 0.00001;
+  constexpr double threshold = 0.01;
 
-  #pragma omp parallel
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < N; ++j) {
       ptype sum = 0;
-      #pragma omp parallel for reduction(+:sum)
       for(size_t k = 0; k < N; ++k){
         sum += a[i * N + k] * b[k * N + j];
       }
@@ -64,15 +62,17 @@ bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vecto
     }
   }
 
-  #pragma omp parallel
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < N; ++j) {
       const auto kernel_value = c[i * N + j];
       const auto host_value = c2[i * N + j];
-      const auto difference = (kernel_value >= host_value) ? kernel_value - host_value : host_value - kernel_value;
+      auto difference = (kernel_value >= host_value) ? kernel_value - host_value : host_value - kernel_value;
+      if(kernel_value == 0) difference = (kernel_value < 0) ? difference / -kernel_value : difference/ kernel_value;
+      else difference = (kernel_value < 0) ? difference / -kernel_value : difference/ kernel_value;
+
       if (difference > threshold) {
-        std::cerr << "VERIFICATION FAILED for element (" << i << "," << j << ")\n\tThe next statement isn't true: |kernel_value - host_value| < threshold\n\t-> |" << kernel_value 
-                  << "-" << host_value << "| = " << difference << " > " << threshold << "\n";
+        std::cerr << "VERIFICATION FAILED for element (" << i << "," << j << ")\n\tThe next statement isn't true: |kernel_value - host_value| / |kernel_value| < threshold\n\t-> |" << kernel_value 
+                  << " - " << host_value << "| / |" << kernel_value << "| = " << difference << " > " << threshold << "\n";
         verification_passed = false;
         break;
       }
@@ -249,7 +249,7 @@ int main(int argc, char *argv[]) {
   constexpr ptype nMin = -10, nMax = 10;
   std::random_device dev;
   std::mt19937 gen(dev()); 
-  std::uniform_int_distribution<ptype> dis(nMin,nMax);
+  std::uniform_real_distribution<ptype> dis(nMin,nMax);
   for (size_t i = 0; i < N*N; i++) {
     opts.pData.a[i] = dis(gen);
     opts.pData.b[i] = dis(gen);
@@ -345,7 +345,7 @@ int main(int argc, char *argv[]) {
   std::cout << "\n\n";
 
   // Type of benchamrk
-  std::cout << "Benchmark: matadd\n";
+  std::cout << "Benchmark: matmul\n";
   std::cout << "Matrices size: " << N << "," << N << "\n";
   std::cout << "Problem size: " << N << ". (an entire row is considered the work item)\n";
   std::cout << "\n\n";

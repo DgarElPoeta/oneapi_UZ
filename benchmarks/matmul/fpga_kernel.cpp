@@ -4,7 +4,7 @@ class KernelMatmulFPGA;
 
 sycl::event fpga_submitKernel(sycl::queue& q, sycl::buffer<ptype,2>& buf_a, sycl::buffer<ptype,2>& buf_b,
                        sycl::buffer<ptype,2>& buf_c, sycl::nd_range<2> size_range, uint64_t N){
-    sycl::event kern_ev = q.submit([&](handler &h) {
+    sycl::event kern_ev = q.submit([&](sycl::handler &h) {
       auto a = buf_a.get_access<sycl::access::mode::read>(h);
       auto b = buf_b.get_access<sycl::access::mode::read>(h);
       auto c = buf_c.get_access<sycl::access::mode::discard_write>(h);
@@ -14,7 +14,9 @@ sycl::event fpga_submitKernel(sycl::queue& q, sycl::buffer<ptype,2>& buf_a, sycl
         size_t j = item.get_global_id(1);
         ptype sum = 0;
         for(size_t k = 0 ; k < N; k++){
-          sum += a[{i,k}] * b[{k,j}];
+          ptype aik = a[{i,k}];
+          ptype bkj = b[{k,j}];
+          sum += aik * bkj;
         }
 
         c[{i,j}] = sum;
