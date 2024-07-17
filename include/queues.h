@@ -20,11 +20,11 @@ static auto exception_handler = [](sycl::exception_list exceptions) {
 
 const sycl::property_list plist = sycl::property_list{sycl::property::queue::enable_profiling()};
 
-#define DEFAULT_QUEUE queue(sycl::default_selector_v, exception_handler,plist)
-#define CPU_QUEUE queue(sycl::cpu_selector_v, exception_handler,plist)
-#define GPU_QUEUE queue(sycl::gpu_selector_v, exception_handler,plist)
-#define FPGAEMU_QUEUE queue(sycl::ext::intel::fpga_emulator_selector_v, exception_handler,plist)
-#define FPGAHW_QUEUE queue(sycl::ext::intel::fpga_selector_v, exception_handler,plist)
+#define DEFAULT_QUEUE sycl::queue(sycl::default_selector_v, exception_handler,plist)
+#define CPU_QUEUE sycl::queue(sycl::cpu_selector_v, exception_handler,plist)
+#define GPU_QUEUE sycl::queue(sycl::gpu_selector_v, exception_handler,plist)
+#define FPGAEMU_QUEUE sycl::queue(sycl::ext::intel::fpga_emulator_selector_v, exception_handler,plist)
+#define FPGAHW_QUEUE sycl::queue(sycl::ext::intel::fpga_selector_v, exception_handler,plist)
 
 
 #endif //QUEUES_H

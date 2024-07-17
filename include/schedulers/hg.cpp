@@ -12,10 +12,10 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
   bool debug = opts.debug;
   auto tpStart = opts.tpStart;
   auto tpDevInit = cpu ? opts.tpCPUStart[thr_id] : opts.tpAccStart;
-  string device_type;
+  std::string device_type;
   { // SYCL scope
 
-    queue q;
+    sycl::queue q;
 
     if(cpu){
       q = CPU_QUEUE;
@@ -112,7 +112,7 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tpBefore = std::chrono::high_resolution_clock::now();
       auto diffBefore = (tpBefore - tpStart).count();
       auto tBefore = diffBefore / 1e9;
-      string aux = std::to_string(tBefore) + " < [" + std::to_string(pkg) + "] (" + std::to_string(pkgdevid) + ") size : " + std::to_string(size) + " offset : " + std::to_string(offset);
+      std::string aux = std::to_string(tBefore) + " < [" + std::to_string(pkg) + "] (" + std::to_string(pkgdevid) + ") size : " + std::to_string(size) + " offset : " + std::to_string(offset);
       DEVICE_DEBUG(aux);
 
       // Include the file that setups the buffers with the benchmark data and invokes the kernel
@@ -185,7 +185,7 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tAfter = diffAfter / 1e9;
       auto bandwidth =  size / tCompute;
 
-      string aux = std::to_string(tAfter) + " >[" + std::to_string(pkgV[CK]) +"] Kernel times (Total : " + 
+      std::string aux = std::to_string(tAfter) + " >[" + std::to_string(pkgV[CK]) +"] Kernel times (Total : " + 
                   std::to_string(tTotal) + " s, Compute: " + std::to_string(tCompute) + 
                   " s. Bandwidth: " + std::to_string(bandwidth) + " u/s";
       DEVICE_DEBUG(aux);
@@ -214,7 +214,7 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
   auto diffDevice = (tpDevEnd - tpDevInit).count(); // Time elapsed since start of device process in nanoseconds
   auto tDevice = diffDevice / 1e9; // Time elapsed since start of device process in milliseconds
 
-  string aux = std::to_string(tSinceStart) + " end [+" + std::to_string(tDevice) + " s.]";
+  std::string aux = std::to_string(tSinceStart) + " end [+" + std::to_string(tDevice) + " s.]";
   DEVICE_DEBUG(aux);
 
   (cpu) ? opts.tCPUEnd = tDevice : opts.tAccEnd = tDevice;

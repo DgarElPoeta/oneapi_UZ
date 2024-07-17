@@ -16,7 +16,7 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
   std::string device_type;
   { // SYCL scope
 
-    queue q;
+    sycl::queue q;
 
     if(cpu){
       q = CPU_QUEUE;
@@ -115,7 +115,7 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tpBefore = std::chrono::high_resolution_clock::now();
       auto diffBefore = (tpBefore - tpStart).count();
       auto tBefore = diffBefore / 1e9;
-      string aux = std::to_string(tBefore) + " < size : " + std::to_string(size) + " offset : " + std::to_string(offset);
+      std::string aux = std::to_string(tBefore) + " < size : " + std::to_string(size) + " offset : " + std::to_string(offset);
       DEVICE_DEBUG(aux);
 
 
@@ -170,7 +170,7 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
   auto diffDevice = (tpDevEnd - tpDevInit).count(); // Time elapsed since start of device process in nanoseconds
   auto tDevice = diffDevice / 1e9; // Time elapsed since start of device process in milliseconds
 
-  string aux = std::to_string(tSinceStart) + " end [+" + std::to_string(tDevice) + " s.]";
+  std::string aux = std::to_string(tSinceStart) + " end [+" + std::to_string(tDevice) + " s.]";
   DEVICE_DEBUG(aux);
 
   (cpu) ? opts.tCPUEnd = tDevice : opts.tAccEnd = tDevice;

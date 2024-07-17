@@ -107,7 +107,7 @@ template <typename T> struct Options {
   uint64_t workSizeAcc; // work size assigned to Accelerator
 
   // Description of accelerator device and cpu device.
-  string accDeviceDesc, cpuDeviceDesc;
+  std::string accDeviceDesc, cpuDeviceDesc;
 
   // Number of threads
   uint32_t numCppThreads;
