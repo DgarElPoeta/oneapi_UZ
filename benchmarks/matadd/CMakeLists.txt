@@ -64,23 +64,20 @@ set(FPGA_EMU_KERNEL fgpa_emu_kernel)
 add_library(FPGA_EMU_KERNEL STATIC ${FPGA_KERNEL_SRC})
 set_target_properties(FPGA_EMU_KERNEL PROPERTIES COMPILE_FLAGS "-fintelfpga")
 
-set(FPGA_KERNEL fpga_kernel.a)
 add_library(FPGA_KERNEL_OBJ OBJECT ${FPGA_KERNEL_SRC})
 set_target_properties(FPGA_KERNEL_OBJ PROPERTIES COMPILE_FLAGS "${HARDWARE_COMPILE_FLAGS}")
 
+set(FPGA_IMAGE ${BENCHMARK}_fpga.a)
 set(FPGA_LINK_FLAGS "-fsycl ${FPGA_FLAGS}")
 separate_arguments(FPGA_LINK_FLAGS)
 # Custom linking command to use icpx with FPGA arguments
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/libFPGA_KERNEL.a
+add_custom_command(OUTPUT ${FPGA_IMAGE}
     COMMAND ${CMAKE_CXX_COMPILER} ${FPGA_LINK_FLAGS} -fsycl-link=image -o ${CMAKE_BINARY_DIR}/libFPGA_KERNEL.a $<TARGET_OBJECTS:FPGA_KERNEL_OBJ> 
     DEPENDS FPGA_KERNEL_OBJ
     COMMENT "Linking FPGA_KERNEL with icpx"
 )
 
-add_custom_target(FPGA_KERNEL
-    DEPENDS ${CMAKE_BINARY_DIR}/libFPGA_KERNEL.a
-)
-
+add_custom_target(fpga_image DEPENDS ${FPGA_IMAGE})
 
 ###############################################################################
 ### FPGA Emulator
@@ -105,7 +102,7 @@ add_custom_target(fpga_emu DEPENDS ${EMULATOR_TARGET})
 set(FPGA_EARLY_IMAGE ${TARGET_NAME}_report.a)
 # The compile output is not an executable, but an intermediate compilation result unique to DPC++.
 add_executable(${FPGA_EARLY_IMAGE} EXCLUDE_FROM_ALL ${FPGA_KERNEL_SRC})
-add_custom_target(report DEPENDS ${FPGA_EARLY_IMAGE})
+add_custom_target(report DEPENDS ${FPGA_EARLY_IMAGE} )
 set_target_properties(${FPGA_EARLY_IMAGE} PROPERTIES COMPILE_FLAGS "${HARDWARE_COMPILE_FLAGS}")
 set_target_properties(${FPGA_EARLY_IMAGE} PROPERTIES LINK_FLAGS "${FPGA_FLAGS} -fsycl-link=early")
 # fsycl-link=early stops the compiler after RTL generation, before invoking Quartus®
@@ -114,17 +111,16 @@ set_target_properties(${FPGA_EARLY_IMAGE} PROPERTIES LINK_FLAGS "${FPGA_FLAGS} -
 ### FPGA Hardware
 ###############################################################################
 # CMake executes:
-#   [compile cpu kernel]  icpx -fsycl -Wall cpu_kernel.cpp -o cpu_kernel.a
+#   [compile cpu kernel]  icpx -fsycl -Wall cpu_kernel.cpp -c -o cpu_kernel.a
 #   [compile fpga kernel] icpx -fsycl -fintelfpga -Wall fpga_kernel.cpp -c -o fpga_kernel.o
 #   [link fpga kernel]    icpx -fsycl -fintelfpga -Wall -Xshardware -Xstarget=<FPGA_DEVICE> fpga_kernel.o -o libFPGA_KERNEL.a
 #   [compile host code]   icpx -fsycl -Wall -fintelfpga matadd.cpp -c -o matadd.o
-#   [fat binary]          icpx -fsycl -fintelfpga -Wall -Xshardware -Xstarget=<FPGA_DEVICE> matadd.o libFPGA_KERNEL.a libCPU_KERNEL.a -o matadd.fpga
+#   [fat binary]          icpx -fsycl -fintelfpga -Wall matadd.o libFPGA_KERNEL.a libCPU_KERNEL.a -o matadd.fpga
 add_executable(${FPGA_TARGET} EXCLUDE_FROM_ALL ${SOURCE_FILE})
-add_custom_target(fpga DEPENDS ${FPGA_TARGET} FPGA_KERNEL)
+add_custom_target(fpga DEPENDS fpga_image ${FPGA_TARGET})
 target_link_libraries(${FPGA_TARGET} ${CMAKE_BINARY_DIR}/libFPGA_KERNEL.a CPU_KERNEL)
 set_target_properties(${FPGA_TARGET} PROPERTIES COMPILE_FLAGS "${HARDWARE_COMPILE_FLAGS}")
 set_target_properties(${FPGA_TARGET} PROPERTIES LINK_FLAGS "${HARDWARE_LINK_FLAGS}")
-
 #
 # End of SECTION 2
 #

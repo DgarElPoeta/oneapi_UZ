@@ -244,7 +244,7 @@ int main(int argc, char *argv[]) {
   constexpr ptype nMin = -10, nMax = 10;
   std::random_device dev;
   std::mt19937 gen(dev()); 
-  std::uniform_int_distribution<ptype> dis(nMin,nMax);
+  std::uniform_real_distribution<ptype> dis(nMin,nMax);
   for (size_t i = 0; i < N*N; i++) {
     opts.pData.a[i] = dis(gen);
     opts.pData.b[i] = dis(gen);
