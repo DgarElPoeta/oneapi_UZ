@@ -56,8 +56,6 @@ void print_float_v(std::string name, std::vector<float>& v, uint64_t N) {
 
 bool verify(Nbody& nbody) {
   uint64_t N = nbody.size;
-  std::vector<ptype> post_out(N);
-  std::vector<ptype> vel_out(N);
   bool verification_passed = true;
 
   constexpr float threshold = 0.00001;
@@ -67,31 +65,24 @@ bool verify(Nbody& nbody) {
       ptype myVel = nbody.vel_in[i];
       ptype acc{0.0f};
       for(size_t = 0; j < N; j++){
-        if(i != j){
-          ptype p = nbody.pos_in[j];
-          ptype r = p - myPos;
-          float m = nbody.body_mass[j];
-          float distSqr = sycl::dot(r,r) + SofteningSquared;
-          float dist = sycl::sqrt(distSqr);
-          float invDist = 1.0f / dist;
-          float invDistCube = invDist * invDist * invDist;
-          acc += m * r * invDistCube;
-        }
+        ptype p = nbody.pos_in[j];
+        ptype r = p - myPos;
+        float m = nbody.body_mass[j];
+        float distSqr = sycl::dot(r,r) + SofteningSquared;
+        float dist = sycl::sqrt(distSqr);
+        float invDist = 1.0f / dist;
+        float invDistCube = invDist * invDist * invDist;
+        acc += m * r * invDistCube;
       }
       acc *= G;
       ptype newVel = myVel + acc * DT;
       ptype newPos = myPos + myVel * DT + 0.5f * acc * DT * DT;
-      post_out[i] = newPos;
-      vel_out[i] = newVel;
-  }
-
-  for (size_t i = 0; i < N; ++i) {
+      ptype pos_host_value = newPos;
+      ptype vel_host_value = newVel;
       ptype pos_kernel_value = nbody.pos_out[i];
-      ptype pos_host_value = post_out[i];
       ptype vel_kernel_value = nbody.vel_out[i];
-      ptype vel_host_value = vel_out[i];
 
-      float value1,value2, difference = 0.0f;
+      float kernel_value,host_value, difference = 0.0f;
       std::string component = "";
       auto pos_difference_x = (pos_kernel_value.x() > pos_host_value.x()) ? pos_kernel_value.x() - pos_host_value.x() : pos_host_value.x() - pos_kernel_value.x();
       auto pos_difference_y = (pos_kernel_value.y() > pos_host_value.y()) ? pos_kernel_value.y() - pos_host_value.y() : pos_host_value.y() - pos_kernel_value.y();
@@ -100,48 +91,52 @@ bool verify(Nbody& nbody) {
       auto vel_difference_x = (vel_kernel_value.x() > vel_host_value.x()) ? vel_kernel_value.x() - vel_host_value.x() : vel_host_value.x() - vel_kernel_value.x();
       auto vel_difference_y = (vel_kernel_value.y() > vel_host_value.y()) ? vel_kernel_value.y() - vel_host_value.y() : vel_host_value.y() - vel_kernel_value.y();
       auto vel_difference_z = (vel_kernel_value.z() > vel_host_value.z()) ? vel_kernel_value.z() - vel_host_value.z() : vel_host_value.z() - vel_kernel_value.z();
+      
       if(pos_difference_x > threshold){
-        value1 = pos_kernel_value.x();
-        value2 = pos_host_value.x();
+        kernel_value = pos_kernel_value.x();
+        host_value = pos_host_value.x();
         difference = pos_difference_x;
         component = "x component of position";
       }
       else if(pos_difference_y > threshold){
-        value1 = pos_kernel_value.y();
-        value2 = pos_host_value.y();
+        kernel_value = pos_kernel_value.y();
+        host_value = pos_host_value.y();
         difference = pos_difference_y;
         component = "y component of position";
       }
       else if(pos_difference_z > threshold){
-        value1 = pos_kernel_value.z();
-        value2 = pos_host_value.z();
+        kernel_value = pos_kernel_value.z();
+        host_value = pos_host_value.z();
         difference = pos_difference_z;
         component = "z component of position";
       }
       else if(vel_difference_x > threshold){
-        value1 = vel_kernel_value.x();
-        value2 = vel_host_value.x();
+        kernel_value = vel_kernel_value.x();
+        host_value = vel_host_value.x();
         difference = vel_difference_x;
         component = "x component of velocity";
       }
       else if(vel_difference_y > threshold){
-        value1 = vel_kernel_value.y();
-        value2 = vel_host_value.y();
+        kernel_value = vel_kernel_value.y();
+        host_value = vel_host_value.y();
         difference = vel_difference_y;
         component = "y component of velocity";
       }
       else if(vel_difference_z > threshold){
-        value1 = vel_kernel_value.z();
-        value2 = vel_host_value.z();
+        kernel_value = vel_kernel_value.z();
+        host_value = vel_host_value.z();
         difference = vel_difference_z;
         component = "z component of velocity";
       }
 
       if (difference > threshold) {
-        fprintf(stderr, "VERIFICATION FAILED for body %ld: %s, |%f-%f| = %f > %f = threshold\n", i, component.c_str(), value1, value2, difference, threshold);
+        std::cerr << "VERIFICATION FAILED for body (" << i << ")\n\tThe next statement isn't true: |kernel_value - host_value| < threshold\n\t-> |" << kernel_value 
+                  << " - " << host_value << "| = " << difference << " > " << threshold << "\n";
         verification_passed = false;
         break;
       }
+
+      if (!verification_passed) { break; }
   }
 
   return verification_passed;
