@@ -59,15 +59,11 @@ bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vecto
         sum += a[i * N + k] * b[k * N + j];
       }
       c2[i * N + j] = sum;
-    }
-  }
-
-  for (size_t i = 0; i < N; ++i) {
-    for (size_t j = 0; j < N; ++j) {
       const auto kernel_value = c[i * N + j];
       const auto host_value = c2[i * N + j];
       auto difference = (kernel_value >= host_value) ? kernel_value - host_value : host_value - kernel_value;
-      if(kernel_value == 0) difference = (kernel_value < 0) ? difference / -kernel_value : difference/ kernel_value;
+      if(kernel_value == 0 && host_value == 0) ;
+      else if(kernel_value == 0) difference = (host_value < 0) ? difference / -host_value : difference/ host_value;
       else difference = (kernel_value < 0) ? difference / -kernel_value : difference/ kernel_value;
 
       if (difference > threshold) {
@@ -77,6 +73,7 @@ bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vecto
         break;
       }
     }
+    
     if (!verification_passed) { break; }
   }
   return verification_passed;
@@ -361,7 +358,7 @@ int main(int argc, char *argv[]) {
     std::cout << "HGuided\n";
     std::cout << "scheduler parameters:\n";
     std::cout << " K: " << opts.K << "\n";
-    std::cout << " minChunkMultiplier (gpu,cpu): (" << opts.minMultiplierAcc << "," << opts.minMultiplierCPU << ")\n";
+    std::cout << " minPkgMultiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
   }
   std::cout << "\n\n";
 
