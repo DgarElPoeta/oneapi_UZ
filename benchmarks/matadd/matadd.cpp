@@ -47,7 +47,6 @@ void print_mat(std::string name, std::vector<ptype>& m, uint64_t N) {
 }
 
 bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vector<ptype>& c) {
-  std::vector<ptype> c2(N * N, 0);
   bool verification_passed = true;
 
   constexpr float threshold = 0.00001;
@@ -55,15 +54,8 @@ bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vecto
   #pragma omp parallel for
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < N; ++j) {
-      c2[i * N + j] = a[i * N + j] + b[i * N + j];
-    }
-  }
-
-  #pragma omp parallel for
-  for (size_t i = 0; i < N; ++i) {
-    for (size_t j = 0; j < N; ++j) {
       const auto kernel_value = c[i * N + j];
-      const auto host_value = c2[i * N + j];
+      const auto host_value = a[i * N + j] + b[i * N + j];
       const auto difference = (kernel_value >= host_value) ? kernel_value - host_value : host_value - kernel_value;
       if (difference > threshold) {
         std::cerr << "VERIFICATION FAILED for element (" << i << "," << j << ")\n\tThe next statement isn't true: |kernel_value - host_value| < threshold\n\t-> |" << kernel_value 
@@ -356,7 +348,7 @@ int main(int argc, char *argv[]) {
     std::cout << "HGuided\n";
     std::cout << "scheduler parameters:\n";
     std::cout << " K: " << opts.K << "\n";
-    std::cout << " minChunkMultiplier (gpu,cpu): (" << opts.minMultiplierAcc << "," << opts.minMultiplierCPU << ")\n";
+    std::cout << " minPkgMultiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
   }
   std::cout << "\n\n";
 
