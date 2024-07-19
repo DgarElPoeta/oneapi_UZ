@@ -64,7 +64,7 @@ bool verify(Nbody& nbody) {
       ptype myPos = nbody.pos_in[i];
       ptype myVel = nbody.vel_in[i];
       ptype acc{0.0f};
-      for(size_t = 0; j < N; j++){
+      for(size_t j = 0; j < N; j++){
         ptype p = nbody.pos_in[j];
         ptype r = p - myPos;
         float m = nbody.body_mass[j];
@@ -82,7 +82,7 @@ bool verify(Nbody& nbody) {
       ptype pos_kernel_value = nbody.pos_out[i];
       ptype vel_kernel_value = nbody.vel_out[i];
 
-      float kernel_value,host_value, difference = 0.0f;
+      float kernel_value = 0.0 ,host_value = 0.0, difference = 0.0f;
       std::string component = "";
       auto pos_difference_x = (pos_kernel_value.x() > pos_host_value.x()) ? pos_kernel_value.x() - pos_host_value.x() : pos_host_value.x() - pos_kernel_value.x();
       auto pos_difference_y = (pos_kernel_value.y() > pos_host_value.y()) ? pos_kernel_value.y() - pos_host_value.y() : pos_host_value.y() - pos_kernel_value.y();
@@ -128,10 +128,23 @@ bool verify(Nbody& nbody) {
         difference = vel_difference_z;
         component = "z component of velocity";
       }
+      std::string value = "";
+      std::string value2 = "";
 
+      if (kernel_value == 0.0 && host_value == 0.0) ;
+      else if(kernel_value == 0.0){
+        difference = (host_value < 0.0) ? difference/ -host_value : difference/host_value;
+        value = "/ |host_value|";
+        value2 = "/ |" + std::to_string(host_value) + "|";
+      }
+      else{
+        difference = (kernel_value < 0.0) ? difference/ -kernel_value : difference/kernel_value;
+        value = "/ |kernel_value|";
+        value2 = "/ |" + std::to_string(kernel_value) + "|";
+      }
       if (difference > threshold) {
-        std::cerr << "VERIFICATION FAILED for body (" << i << ")\n\tThe next statement isn't true: |kernel_value - host_value| < threshold\n\t-> |" << kernel_value 
-                  << " - " << host_value << "| = " << difference << " > " << threshold << "\n";
+        std::cerr << "VERIFICATION FAILED for body (" << i << "), " << component << "\n\tThe next statement isn't true: |kernel_value - host_value| " << value << " < threshold\n\t-> |" << kernel_value 
+                  << " - " << host_value << "| " << value2 << " = " << difference << " > " << threshold << "\n";
         verification_passed = false;
         break;
       }
@@ -319,9 +332,9 @@ int main(int argc, char *argv[]) {
   std::uniform_real_distribution<float> mass_dis(massMin, massMax);
 
   for (size_t i = 0; i < N; i++) {
-    opts.pData.pos_in[i] = pytpe{pos_dis(gen),pos_dis(gen),pos_dis(gen)};
+    opts.pData.pos_in[i] = ptype{pos_dis(gen),pos_dis(gen),pos_dis(gen)};
     opts.pData.vel_in[i] = ptype{vel_dis(gen),vel_dis(gen),vel_dis(gen)};
-    opts.pData.pos_out[i] = pytpe{0.0f,0.0f,0.0f};
+    opts.pData.pos_out[i] = ptype{0.0f,0.0f,0.0f};
     opts.pData.vel_out[i] = ptype{0.0f,0.0f,0.0f};
     opts.pData.body_mass[i] = mass_dis(gen);
   }

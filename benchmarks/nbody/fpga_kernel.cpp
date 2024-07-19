@@ -3,15 +3,15 @@
 class KernelNbodyFPGA;
 
 sycl::event fpga_submitKernel(sycl::queue& q, sycl::buffer<ptype,1>& buf_pos_in, sycl::buffer<ptype,1>& buf_vel_in,
-                       sycl::buffer<ptype,1>& buf_pos_out, sycl::buffer<pytpe,1>& buf_vel_out,
+                       sycl::buffer<ptype,1>& buf_pos_out, sycl::buffer<ptype,1>& buf_vel_out,
                        sycl::buffer<float,1>& body_mass, sycl::nd_range<1> size_range, 
                        uint64_t num_bodies, uint64_t offset){
     sycl::event kern_ev = q.submit([&](sycl::handler &h) {
-      auto pos = buf_pos_in.get_access<sycl::access::mode::read>(h);
-      auto vel = buf_vel_in.get_access<sycl::access::mode::read>(h);
-      auto mass = body_mass.get_access<sycl::access::mode::read>(h);
-      auto newPosition = buf_pos_out.get_access<sycl::access::mode::discard_write>(h);
-      auto newVelocity = buf_vel_out.get_access<sycl::access::mode::discard_write>(h);
+      sycl::accessor pos(buf_pos_in, h, sycl::read_only);
+      sycl::accessor vel(buf_vel_in, h, sycl::read_only);
+      sycl::accessor mass(body_mass, h, sycl::read_only);
+      sycl::accessor newPosition(buf_pos_out, h, sycl::write_only);
+      sycl::accessor newVelocity(buf_vel_out, h, sycl::write_only);
 
       h.parallel_for<KernelNbodyFPGA>(size_range, [=](sycl::nd_item<1> item){
         size_t tid = item.get_global_id(0);

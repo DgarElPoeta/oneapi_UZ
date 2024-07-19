@@ -1,5 +1,5 @@
-set(TARGET_NAME matmul)
-set(SOURCE_FILE matmul.cpp)
+set(TARGET_NAME nbody)
+set(SOURCE_FILE nbody.cpp)
 
 #
 # SECTION 1

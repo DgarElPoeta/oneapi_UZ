@@ -32,10 +32,10 @@ sycl::nd_range<1> size_range(range_gws, range_lws);
 // Get the offset pointers values
 
 ptype* pos_in = opts.pData.pos_in.data();
-ptype* vel_in = opts.pData.vel_out.data();
-pytpe* mass = opts.pData.mass.data();
+ptype* vel_in = opts.pData.vel_in.data();
+float* mass = opts.pData.body_mass.data();
 ptype* pos_out = opts.pData.pos_out.data() + offset;
-pytpe* vel_out = opts.pData.vel_out.data() + offset;
+ptype* vel_out = opts.pData.vel_out.data() + offset;
 
 // Create the buffers
 
