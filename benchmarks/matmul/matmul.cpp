@@ -62,13 +62,22 @@ bool verify(uint64_t N, std::vector<ptype>& a, std::vector<ptype>& b, std::vecto
       const auto kernel_value = c[i * N + j];
       const auto host_value = c2[i * N + j];
       auto difference = (kernel_value >= host_value) ? kernel_value - host_value : host_value - kernel_value;
+      std::string svalue = "", value = "" ;
       if(kernel_value == 0 && host_value == 0) ;
-      else if(kernel_value == 0) difference = (host_value < 0) ? difference / -host_value : difference/ host_value;
-      else difference = (kernel_value < 0) ? difference / -kernel_value : difference/ kernel_value;
+      else if(kernel_value == 0){
+        difference = (host_value < 0) ? difference / -host_value : difference/ host_value;
+        svalue = "/ |host_value|";
+        value = "/ |" + std::to_string(host_value) + "|";
+      }
+      else{
+        difference = (kernel_value < 0) ? difference / -kernel_value : difference/ kernel_value;
+        svalue = "/ |kernel_value|";
+        value = "/ |" + std::to_string(kernel_value) + "|";
+      }
 
       if (difference > threshold) {
-        std::cerr << "VERIFICATION FAILED for element (" << i << "," << j << ")\n\tThe next statement isn't true: |kernel_value - host_value| / |kernel_value| < threshold\n\t-> |" << kernel_value 
-                  << " - " << host_value << "| / |" << kernel_value << "| = " << difference << " > " << threshold << "\n";
+        std::cerr << "VERIFICATION FAILED for element (" << i << "," << j << ")\n\tThe next statement isn't true: |kernel_value - host_value| " << svalue << " < threshold\n\t-> |" << kernel_value 
+                  << " - |" << host_value << "| "  << value << " = " << difference << " > " << threshold << "\n";
         verification_passed = false;
         break;
       }
@@ -89,6 +98,7 @@ int main(int argc, char *argv[]) {
 
   argc--;
   if (argc < 4) {
+    std::cerr << "Number of arguments is less than expected\n";
     return usage();
   }
 
@@ -97,6 +107,7 @@ int main(int argc, char *argv[]) {
   std::string mode_str = argv[1]; // string with the mode
   Mode mode; // Heterogeneous execution mode
   if (!hashMode(mode_str, mode)) {
+    std::cerr << "Invalid mode\n";
     return usage();
   }
 
@@ -105,6 +116,7 @@ int main(int argc, char *argv[]) {
   std::string algo_str = argv[2]; // string with the algorithm
   Algo algo; // Scheduler algorithm
   if (!hashAlgo(algo_str, algo)) {
+    std::cerr << "Invalid algorithm\n";
     return usage();
   }
 
@@ -129,6 +141,10 @@ int main(int argc, char *argv[]) {
 
   // Problem dimension arg
   const uint64_t N = atoi(argv[4]); // Problem dimension
+  if (N == 0 || ((N & (WGS - 1)) != 0)) {
+    std::cerr << "Problem size must be greater than 0 and multiple of " << WGS << "\n";
+    return 1;
+  }
 
 
   // Number of cpp threads arg
@@ -243,7 +259,7 @@ int main(int argc, char *argv[]) {
   // -------------------------------------------------------------------------------------------------
   // Initialization of elements in matrices in Matmul data type of Opts with random values
 
-  constexpr ptype nMin = -10, nMax = 10;
+  constexpr ptype nMin = 0, nMax = 40;
   std::random_device dev;
   std::mt19937 gen(dev()); 
   std::uniform_real_distribution<ptype> dis(nMin,nMax);
@@ -343,8 +359,8 @@ int main(int argc, char *argv[]) {
 
   // Type of benchamrk
   std::cout << "Benchmark: matmul\n";
-  std::cout << "Matrices size: " << N << "," << N << "\n";
-  std::cout << "Problem size: " << N << ". (an entire row is considered the work item)\n";
+  std::cout << "Matrices size: " << N << " x " << N << "\n";
+  std::cout << "Problem size: " << N << " (an entire row is considered the work item)\n";
   std::cout << "\n\n";
 
   // Type of scheduler
@@ -358,7 +374,7 @@ int main(int argc, char *argv[]) {
     std::cout << "HGuided\n";
     std::cout << "scheduler parameters:\n";
     std::cout << " K: " << opts.K << "\n";
-    std::cout << " minPkgMultiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
+    std::cout << " min_pkg_Multiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
   }
   std::cout << "\n\n";
 
