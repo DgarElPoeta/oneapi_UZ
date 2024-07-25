@@ -25,7 +25,7 @@ void process(bool cpu, Options<T>& opts, uint32_t thr_id) {
 }
 
 int usage() {
-  std::cout
+  std::cerr
       << "usage: <cpu|gpu|fpga|cpu_gpu|cpu_fpga> <static|dynamic|hguided> <num pkgs (dyn)|cpu proportion (st|hg)> <problem size> [num_cpp_threads]\n"
       << "Environment variables:\n"
       << "DEBUG=y   to print messages during execution\n"
@@ -79,6 +79,7 @@ int main(int argc, char *argv[]) {
 
   argc--;
   if (argc < 4) {
+    std::cerr << "Number of arguments is less than expected\n";
     return usage();
   }
 
@@ -87,6 +88,7 @@ int main(int argc, char *argv[]) {
   std::string mode_str = argv[1]; // string with the mode
   Mode mode; // Heterogeneous execution mode
   if (!hashMode(mode_str, mode)) {
+    std::cerr << "Invalid mode\n";
     return usage();
   }
 
@@ -95,6 +97,7 @@ int main(int argc, char *argv[]) {
   std::string algo_str = argv[2]; // string with the algorithm
   Algo algo; // Scheduler algorithm
   if (!hashAlgo(algo_str, algo)) {
+    std::cerr << "Invalid algorithm\n";
     return usage();
   }
 
@@ -119,6 +122,10 @@ int main(int argc, char *argv[]) {
 
   // Problem dimension arg
   const uint64_t N = atoi(argv[4]); // Problem dimension
+  if (N == 0 || ((N & (WGS - 1)) != 0)) {
+    std::cerr << "Problem size must be greater than 0 and multiple of " << WGS << "\n";
+    return 1;
+  }
 
 
   // Number of cpp threads arg
@@ -333,8 +340,8 @@ int main(int argc, char *argv[]) {
 
   // Type of benchamrk
   std::cout << "Benchmark: matadd\n";
-  std::cout << "Matrices size: " << N << "," << N << "\n";
-  std::cout << "Problem size: " << N << ". (an entire row is considered the work item)\n";
+  std::cout << "Matrices size: " << N << " x " << N << "\n";
+  std::cout << "Problem size: " << N << " (an entire row is considered the work unit)\n";
   std::cout << "\n\n";
 
   // Type of scheduler
@@ -348,7 +355,7 @@ int main(int argc, char *argv[]) {
     std::cout << "HGuided\n";
     std::cout << "scheduler parameters:\n";
     std::cout << " K: " << opts.K << "\n";
-    std::cout << " minPkgMultiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
+    std::cout << " min_pkg_multiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
   }
   std::cout << "\n\n";
 

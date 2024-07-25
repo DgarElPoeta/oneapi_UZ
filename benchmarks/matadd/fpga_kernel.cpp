@@ -5,9 +5,10 @@ class KernelMataddFPGA;
 sycl::event fpga_submitKernel(sycl::queue& q, sycl::buffer<ptype,2>& buf_a, sycl::buffer<ptype,2>& buf_b,
                        sycl::buffer<ptype,2>& buf_c, sycl::nd_range<2> size_range){
     sycl::event kern_ev = q.submit([&](sycl::handler &h) {
-      auto a = buf_a.get_access<sycl::access::mode::read>(h);
-      auto b = buf_b.get_access<sycl::access::mode::read>(h);
-      auto c = buf_c.get_access<sycl::access::mode::discard_write>(h);
+      
+      sycl::accessor a(buf_a, h, sycl::read_only);
+      sycl::accessor b(buf_b, h, sycl::read_only);
+      sycl::accessor c(buf_c, h, sycl::write_only);
 
       h.parallel_for<KernelMataddFPGA>(size_range, [=](sycl::nd_item<2> item){
         size_t i = item.get_global_id(0);
