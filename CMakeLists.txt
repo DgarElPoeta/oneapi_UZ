@@ -11,7 +11,7 @@ set(CMAKE_VERBOSE_MAKEFILE On)
 SET(CMAKE_CXX_COMPILER "icpx")
 
 # Set the compile flags
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -Wall")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -sycl-std=2020 -Wall")
 
 # Set the link flags
 SET(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -fsycl -lpthread")
