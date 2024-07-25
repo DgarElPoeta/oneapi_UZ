@@ -9,12 +9,10 @@ auto N = opts.pData.size;
  */
 sycl::range<2> range_input = sycl::range<2>(N,N); 
 
-auto filter_dim = opts.pData.filterDim;
-
 /*
  * We define the range of the gaussian filter.
  */
-sycl::range<2> range_filter = sycl::range<2>(filter_dim, filter_dim); 
+sycl::range<2> range_filter = sycl::range<2>(filterDim, filterDim); 
 
 
 /*
@@ -40,13 +38,13 @@ sycl::nd_range<2> size_range(range_gws, range_lws);
 // Get the offset pointers values
 
 ptype* input = opts.pData.input.data();
-ptype* filter = opts.pData.filter.data();
+float* filter = opts.pData.filter.data();
 ptype* blurred = opts.pData.blurred.data() + offset*N;
 
 // Create the buffers
 
 buf_input[CK].reset(new sycl::buffer<ptype, 2>(input, range_input));
-buf_filter[CK].reset(new sycl::buffer<float, 2>(filter, range_input));
+buf_filter[CK].reset(new sycl::buffer<float, 2>(filter, range_filter));
 buf_blurred[CK].reset(new sycl::buffer<ptype, 2>(blurred, range_gws));
 
 submit_event[CK] =

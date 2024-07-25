@@ -5,6 +5,7 @@
 #include <thread>
 #include <iostream>
 #include <cmath>
+#include <sycl/sycl.hpp>
 
 #include "gaussian.h"
 #include "benchmarks.h"
@@ -47,12 +48,12 @@ void print_filter(std::string name, std::vector<float>& f, uint64_t N) {
   }
 }
 
-void print_image(std::string name, std::vector<ptype>& i, uint64_t N) {
+void print_image(std::string name, std::vector<ptype>& image, uint64_t N) {
   std::cout << name << "\n";
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < N; ++j) {
-      ptype p = i[i * N + j];
-      std::cout << "(" << p.x() << "," << p.y() << "," << p.z() << ") ";
+      ptype p = image[i * N + j];
+      std::cout << "(" << (int) p.x() << "," << (int) p.y() << "," << (int) p.z() << ") ";
     }
     std::cout << "\n";
   }
@@ -62,30 +63,32 @@ bool verify(Gaussian& g){
   size_t N = g.size;
   bool verification_passed = true;
 
-  constexpr float threshold = 0.00001;
-  const float halft = filterDim / 2; 
+  const size_t half = filterDim / 2; 
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < N; ++j) {
-      sycl::float3 p = ptype{0};
+      sycl::float3 p = sycl::float3{0.0};
       for(size_t x = 0; x < filterDim; x++){
         for(size_t y = 0; y < filterDim; y++){
-          int r = (int) i + (int) x - filterDim / 2;
-          int c = (int) j + (int) y - filterDim / 2;
+          int r = (int) i + (int) x - (int) half;
+          int c = (int) j + (int) y - (int) half;
           if(r >= 0 && r < N && c >= 0 && c < N){
-            sycl:float3 aux = g.input[r * N + c];
+            sycl::float3 aux = g.input[r * N + c].convert<float>();
             float weight  = g.filter[x * filterDim + y];
             p += aux * weight;
           }
         }
       }
 
-      ptype blurred_host = sycl::round(p).convert<uchar>();
+      ptype blurred_host = sycl::round(p).convert<unsigned char>();
       ptype blurred_kernel = g.blurred[i * N + j];
-
-      if (blurred_host.x() != blurred_kernel.x() || blurred_host.y() != blurred_kernel.y() || blurred_host.z() != blurred_kernel.z()){
-        std::cerr << "VERIFICATION FAILED for pixel (" << i << "," << j << ")\n\tThe next statement isn't true: kernel_value == host_value|n\t-> (" 
-                  << blurred_kernel.x() << "," << blurred_kernel.y() << "," << blurred_kernel.z() << ") != (" 
-                  << blurred_host.x() << "," << blurred_host.y() << "," << blurred_host.z() << ")\n";
+      uint64_t max_diff = 1;
+      uint64_t difference_x = (blurred_kernel.x() > blurred_host.x()) ? blurred_kernel.x() - blurred_host.x() : blurred_host.x() - blurred_kernel.x();
+      uint64_t difference_y = (blurred_kernel.y() > blurred_host.y()) ? blurred_kernel.y() - blurred_host.y() : blurred_host.y() - blurred_kernel.y();
+      uint64_t difference_z = (blurred_kernel.z() > blurred_host.z()) ? blurred_kernel.z() - blurred_host.z() : blurred_host.z() - blurred_kernel.z();
+      if (difference_x > max_diff || difference_y > max_diff || difference_z > max_diff) {
+        std::cerr << "VERIFICATION FAILED for pixel (" << i << "," << j << ")\n\tThe next statement isn't true: kernel_value == host_value\n\t-> (" 
+                  << (int) blurred_kernel.x() << "," << (int) blurred_kernel.y() << "," << (int) blurred_kernel.z() << ") != (" 
+                  << (int) blurred_host.x() << "," << (int) blurred_host.y() << "," << (int) blurred_host.z() << ")\n";
         verification_passed = false;
         break;
       }
@@ -105,6 +108,7 @@ int main(int argc, char *argv[]) {
 
   argc--;
   if (argc < 4) {
+    std::cerr << "Number of arguments is less than expected\n";
     return usage();
   }
 
@@ -113,6 +117,7 @@ int main(int argc, char *argv[]) {
   std::string mode_str = argv[1]; // string with the mode
   Mode mode; // Heterogeneous execution mode
   if (!hashMode(mode_str, mode)) {
+    std::cerr << "Invalid mode\n";
     return usage();
   }
 
@@ -121,6 +126,7 @@ int main(int argc, char *argv[]) {
   std::string algo_str = argv[2]; // string with the algorithm
   Algo algo; // Scheduler algorithm
   if (!hashAlgo(algo_str, algo)) {
+    std::cerr << "Invalid algorithm\n";
     return usage();
   }
 
@@ -145,6 +151,10 @@ int main(int argc, char *argv[]) {
 
   // Problem dimension arg
   const uint64_t N = atoi(argv[4]); // Problem dimension
+  if (N == 0 || ((N & (WGS - 1)) != 0)) {
+    std::cerr << "Problem size must be greater than 0 and multiple of " << WGS << "\n";
+    return 1;
+  }
 
 
   // Number of cpp threads arg
@@ -249,7 +259,7 @@ int main(int argc, char *argv[]) {
   opts.pData = Gaussian();
   opts.pData.size = N;
   opts.pData.input = std::vector<ptype>(N*N);
-  opts.pData.filter = std::vector<ptype>(filterDim*filterDim);
+  opts.pData.filter = std::vector<float>(filterDim*filterDim);
   opts.pData.blurred = std::vector<ptype>(N*N,ptype{0});
 
 
@@ -273,7 +283,7 @@ int main(int argc, char *argv[]) {
   // -------------------------------------------------------------------------------------------------
   // Initialization of gaussian filter in Gaussian data type of Opts with random values
   const uint64_t middle = filterDim / 2;
-  const float sigma = 2.0f;
+  constexpr float sigma = 2.0f;
   constexpr float sC = 2.0f * sigma * sigma;
   float sum = 0.0f;
   for (size_t i = 0; i < filterDim; i++) {
@@ -385,9 +395,9 @@ int main(int argc, char *argv[]) {
 
   // Type of benchamrk
   std::cout << "Benchmark: gaussian\n";
-  std::cout << "Image size: " << N << "," << N << "\n";
-  std::cout << "Filter size: " << filterDim << "," << filterDim << "\n";
-  std::cout << "Problem size: " << N << ". (an entire row of image is considered the work item)\n";
+  std::cout << "Image size: " << N << " x " << N << "\n";
+  std::cout << "Filter size: " << filterDim << " x " << filterDim << "\n";
+  std::cout << "Problem size: " << N << " (an entire row of image pixels is considered the work item)\n";
   std::cout << "\n\n";
 
   // Type of scheduler
@@ -401,7 +411,7 @@ int main(int argc, char *argv[]) {
     std::cout << "HGuided\n";
     std::cout << "scheduler parameters:\n";
     std::cout << " K: " << opts.K << "\n";
-    std::cout << " minPkgMultiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
+    std::cout << " Min_pkg_multiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
   }
   std::cout << "\n\n";
 
