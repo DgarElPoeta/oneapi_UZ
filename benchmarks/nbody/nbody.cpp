@@ -128,23 +128,23 @@ bool verify(Nbody& nbody) {
         difference = vel_difference_z;
         component = "z component of velocity";
       }
+      std::string svalue = "";
       std::string value = "";
-      std::string value2 = "";
 
       if (kernel_value == 0.0 && host_value == 0.0) ;
       else if(kernel_value == 0.0){
         difference = (host_value < 0.0) ? difference/ -host_value : difference/host_value;
-        value = "/ |host_value|";
-        value2 = "/ |" + std::to_string(host_value) + "|";
+        svalue = "/ |host_value|";
+        value = "/ |" + std::to_string(host_value) + "|";
       }
       else{
         difference = (kernel_value < 0.0) ? difference/ -kernel_value : difference/kernel_value;
-        value = "/ |kernel_value|";
-        value2 = "/ |" + std::to_string(kernel_value) + "|";
+        svalue = "/ |kernel_value|";
+        value = "/ |" + std::to_string(kernel_value) + "|";
       }
       if (difference > threshold) {
-        std::cerr << "VERIFICATION FAILED for body (" << i << "), " << component << "\n\tThe next statement isn't true: |kernel_value - host_value| " << value << " < threshold\n\t-> |" << kernel_value 
-                  << " - " << host_value << "| " << value2 << " = " << difference << " > " << threshold << "\n";
+        std::cerr << "VERIFICATION FAILED for body (" << i << "), " << component << "\n\tThe next statement isn't true: |kernel_value - host_value| " << svalue << " < threshold\n\t-> |" << kernel_value 
+                  << " - " << host_value << "| " << value << " = " << difference << " > " << threshold << "\n";
         verification_passed = false;
         break;
       }
@@ -165,6 +165,7 @@ int main(int argc, char *argv[]) {
 
   argc--;
   if (argc < 4) {
+    std::cerr << "Number of arguments is less than expected\n";
     return usage();
   }
 
@@ -173,6 +174,7 @@ int main(int argc, char *argv[]) {
   std::string mode_str = argv[1]; // string with the mode
   Mode mode; // Heterogeneous execution mode
   if (!hashMode(mode_str, mode)) {
+    std::cerr << "Invalid mode\n";
     return usage();
   }
 
@@ -181,6 +183,7 @@ int main(int argc, char *argv[]) {
   std::string algo_str = argv[2]; // string with the algorithm
   Algo algo; // Scheduler algorithm
   if (!hashAlgo(algo_str, algo)) {
+    std::cerr << "Invalid algorithm\n";
     return usage();
   }
 
@@ -205,6 +208,10 @@ int main(int argc, char *argv[]) {
 
   // Problem dimension arg
   const uint64_t N = atoi(argv[4]); // Problem dimension
+  if (N == 0 || ((N & (WGS - 1)) != 0)) {
+    std::cerr << "Problem size must be greater than 0 and multiple of " << WGS << "\n";
+    return 1;
+  }
 
 
   // Number of cpp threads arg
@@ -310,8 +317,8 @@ int main(int argc, char *argv[]) {
   opts.pData.size = N;
   opts.pData.pos_in = std::vector<ptype>(N);
   opts.pData.vel_in = std::vector<ptype>(N);
-  opts.pData.pos_out = std::vector<ptype>(N);
-  opts.pData.vel_out = std::vector<ptype>(N);
+  opts.pData.pos_out = std::vector<ptype>(N,ptype{0.0});
+  opts.pData.vel_out = std::vector<ptype>(N,ptype{0.0});
   opts.pData.body_mass = std::vector<float>(N);
 
 
@@ -334,8 +341,6 @@ int main(int argc, char *argv[]) {
   for (size_t i = 0; i < N; i++) {
     opts.pData.pos_in[i] = ptype{pos_dis(gen),pos_dis(gen),pos_dis(gen)};
     opts.pData.vel_in[i] = ptype{vel_dis(gen),vel_dis(gen),vel_dis(gen)};
-    opts.pData.pos_out[i] = ptype{0.0f,0.0f,0.0f};
-    opts.pData.vel_out[i] = ptype{0.0f,0.0f,0.0f};
     opts.pData.body_mass[i] = mass_dis(gen);
   }
 
@@ -444,7 +449,7 @@ int main(int argc, char *argv[]) {
     std::cout << "HGuided\n";
     std::cout << "scheduler parameters:\n";
     std::cout << " K: " << opts.K << "\n";
-    std::cout << " minPkgMultiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
+    std::cout << " min_pkg_pultiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
   }
   std::cout << "\n\n";
 
