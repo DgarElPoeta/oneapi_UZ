@@ -64,7 +64,7 @@ add_library(CPU_KERNEL OBJECT ${CPU_KERNEL_SRC})
 set(FPGA_EMU_KERNEL fgpa_emu_kernel)
 add_library(FPGA_EMU_KERNEL OBJECT ${FPGA_KERNEL_SRC})
 set_target_properties(FPGA_EMU_KERNEL PROPERTIES 
-    COMPILE_FLAGS "${EMULATOR_COMPILE_FLAGS}"
+    COMPILE_FLAGS "${FPGA_COMPILE_FLAGS}"
 )
 
 # Compile and link the FPGA image
