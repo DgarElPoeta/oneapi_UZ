@@ -69,6 +69,7 @@ struct WorkPackages
   }
 };
 
+constexpr uint64_t WGS = 128;
 
 template <typename T> struct Options {
 
@@ -146,7 +147,7 @@ template <typename T> struct Options {
 
   T pData; // Benchmark data type with contains the data. Eg. Matmul, Gaussian
 
-  Options() : usm(false), wgs(128), sizeMultiple(wgs), mWork(), mCPU(){
+  Options() : usm(false), wgs(WGS), sizeMultiple(wgs), mWork(), mCPU(){
   }
 
   void setupWorkPkgs(){

@@ -54,42 +54,43 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
     uint64_t eThread = ((size_CPU / num_cpp_threads) < pkg_size_multiple) ?  size_CPU / pkg_size_multiple : num_cpp_threads;
 
     uint64_t offset_CPU = size_accelerator;
-
-    if(eThread == 0 && thr_id == 0){
-      size_CPU = total_size;
-      *(opts.pPkgCPU) = 1;
-    }
-    else if(eThread < num_cpp_threads){
-      if(thr_id + 1 == eThread && size_CPU != eThread * pkg_size_multiple){
-        size_CPU = size_CPU - eThread * pkg_size_multiple;
-        offset_CPU += eThread * pkg_size_multiple;
-        *(opts.pPkgCPU) = eThread+1;
+    if(size_CPU > 0 ){
+      if(eThread == 0 && thr_id == 0){
+        size_CPU = total_size;
+        *(opts.pPkgCPU) = 1;
       }
-      else if(thr_id < eThread){
-        size_CPU = pkg_size_multiple;
-        offset_CPU += thr_id * pkg_size_multiple;
-        if(thr_id == 0) *(opts.pPkgCPU) = eThread;
-      }
-      else size_CPU = 0;
-    }
-    else{
-      uint64_t total_pkg = size_CPU / pkg_size_multiple;
-      uint64_t pkg_per_thread = total_pkg / num_cpp_threads;
-      uint64_t pkg_1more = total_pkg - pkg_per_thread * num_cpp_threads;
-      if(thr_id < pkg_1more){
-        size_CPU = (pkg_per_thread + 1) * pkg_size_multiple;
-        offset_CPU += thr_id * (pkg_per_thread + 1) * pkg_size_multiple;
-      }
-      else if(size_CPU != total_pkg * pkg_size_multiple && thr_id+1 == num_cpp_threads){
-        size_CPU -= (total_pkg - pkg_per_thread) * pkg_size_multiple;
-        offset_CPU += (total_pkg - pkg_per_thread) * pkg_size_multiple;
+      else if(eThread < num_cpp_threads){
+        if(thr_id + 1 == eThread && size_CPU != eThread * pkg_size_multiple){
+          size_CPU = size_CPU - eThread * pkg_size_multiple;
+          offset_CPU += eThread * pkg_size_multiple;
+          *(opts.pPkgCPU) = eThread+1;
+        }
+        else if(thr_id < eThread){
+          size_CPU = pkg_size_multiple;
+          offset_CPU += thr_id * pkg_size_multiple;
+          if(thr_id == 0) *(opts.pPkgCPU) = eThread;
+        }
+        else size_CPU = 0;
       }
       else{
-        size_CPU = pkg_per_thread * pkg_size_multiple;
-        offset_CPU += pkg_1more * pkg_size_multiple + thr_id * pkg_per_thread * pkg_size_multiple;
-      }
-      if(thr_id == 0) *(opts.pPkgCPU) = num_cpp_threads;
+        uint64_t total_pkg = size_CPU / pkg_size_multiple;
+        uint64_t pkg_per_thread = total_pkg / num_cpp_threads;
+        uint64_t pkg_1more = total_pkg - pkg_per_thread * num_cpp_threads;
+        if(thr_id < pkg_1more){
+          size_CPU = (pkg_per_thread + 1) * pkg_size_multiple;
+          offset_CPU += thr_id * (pkg_per_thread + 1) * pkg_size_multiple;
+        }
+        else if(size_CPU != total_pkg * pkg_size_multiple && thr_id+1 == num_cpp_threads){
+          size_CPU -= (total_pkg - pkg_per_thread) * pkg_size_multiple;
+          offset_CPU += (total_pkg - pkg_per_thread) * pkg_size_multiple;
+        }
+        else{
+          size_CPU = pkg_per_thread * pkg_size_multiple;
+          offset_CPU += pkg_1more * pkg_size_multiple + thr_id * pkg_per_thread * pkg_size_multiple;
+        }
+        if(thr_id == 0) *(opts.pPkgCPU) = num_cpp_threads;
 
+      }
     }
     if(!cpu){
       if(size_accelerator == 0) *(opts.pPkgAcc) = 0;
