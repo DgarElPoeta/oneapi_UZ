@@ -1,0 +1,1 @@
+std::unique_ptr<sycl::buffer<ptype, 2>> buf_out[num_kernels];
