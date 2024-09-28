@@ -58,13 +58,21 @@ struct WorkPackages
   uint64_t offset;
   uint64_t size;
   double tCompute;
+  double tTotalKernel;
+  double tTotalEvent;
+  double tDTH;
+  double tTotal;
   double tSinceStart;
   WorkPackages() {}
-  WorkPackages(uint64_t _offset, uint64_t _size, double _tCompute, double _tSinceStart)
+  WorkPackages(uint64_t _offset, uint64_t _size, double _tCompute, double _tTotalKernel, double _tTotalEvent, double _tDTH, double _tTotal, double _tSinceStart)
   {
     offset = _offset;
     size = _size;
     tCompute = _tCompute;
+    tTotalKernel = _tTotalKernel;
+    tTotalEvent = _tTotalEvent;
+    tDTH = _tDTH;
+    tTotal = _tTotal;
     tSinceStart = _tSinceStart;
   }
 };
@@ -135,6 +143,13 @@ template <typename T> struct Options {
   // Accelerator thread start timepoint
   std::chrono::high_resolution_clock::time_point tpAccStart;
 
+  bool firstCPU;
+  std::chrono::high_resolution_clock::time_point tpFirstCPU; // Timepoint of the first CPU to submit a event.
+  std::chrono::high_resolution_clock::time_point tpLastCPU; // Timepoint of the last CPU to end the kernel
+
+  std::chrono::high_resolution_clock::time_point tpFirstAcc; // Timepoint of the first accelerator to submit a event.
+  std::chrono::high_resolution_clock::time_point tpLastAcc; // Timepoint of the last accelerator to end the kernel
+
   // Time spent in seconds for the solving of the problem in the devices
   double tCPUEnd; // Time spent in the CPU
   double tAccEnd; // Time spent in the accelerator
@@ -173,17 +188,16 @@ template <typename T> struct Options {
   }
 
   void
-  saveWorkPackages(bool cpu, uint64_t index, uint64_t offset, uint64_t size, double tCompute)
+  saveWorkPackages(bool cpu, uint64_t index, uint64_t offset, uint64_t size, double tCompute, double tTotalKernel, double tTotalEvent, double tDTH, double tTotal)
   {
     auto tp = std::chrono::high_resolution_clock::now();
     double tSinceStart = (tp - tpStart).count() / 1e9;
     if (cpu){
       if(index >= wPkgsCPU.size()) wPkgsCPU.resize(wPkgsCPU.size() + 20);
-      wPkgsCPU[index] = WorkPackages(offset, size, tCompute, tSinceStart);
+      wPkgsCPU[index] = WorkPackages(offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal, tSinceStart);
     } else {
-
       if (index >= wPkgsAcc.size()) wPkgsAcc.resize(wPkgsAcc.size() + 20);
-      wPkgsAcc[index] = WorkPackages(offset, size, tCompute, tSinceStart);
+      wPkgsAcc[index] = WorkPackages(offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal, tSinceStart);
     }
   }
 };

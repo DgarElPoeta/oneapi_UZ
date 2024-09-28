@@ -58,17 +58,19 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
     constexpr size_t num_kernels = 2; // Total number of kernels that can be active at the same time
     uint64_t sent_kernels = 0; // Total number of kernels that have been sent
     uint64_t active_kernels = 0; // Number of active kernels
-    sycl::event submit_event[num_kernels];
+    sycl::event submit_event[num_kernels]; // Array with the events of the kernels
 
     // Include the file that defines the buffers used in the kernels.
     #include "buffers_sycl.cpp"
 
     std::vector<uint64_t> sizeV(num_kernels), offsetV(num_kernels), pkgDevV(num_kernels), pkgV(num_kernels);
+    std::vector<std::chrono::high_resolution_clock::time_point> tpV(num_kernels);
     while (work) {
       uint64_t size = 0;
       uint64_t offset = 0;
       uint64_t pkg = 0;
       uint64_t pkgdevid = 0;
+      bool firstCPU = false;
       {
         std::lock_guard<std::mutex> lk(opts.mWork);
         uint64_t pWork = *(opts.pWork);
@@ -99,7 +101,13 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
           pkgV[CK] = pkg;
           *(opts.pPkg) = pkg+1;
           pkgDevV[CK] = pkgdevid;
-          if (cpu) *(opts.pPkgCPU) = pkgdevid+1;
+          if (cpu){
+            *(opts.pPkgCPU) = pkgdevid+1;
+            if(opts.firstCPU) {
+              firstCPU = true;
+              opts.firstCPU = false;
+            }
+          } 
           else *(opts.pPkgAcc) = pkgdevid+1;
           sizeV[CK] = size;
           offsetV[CK] = offset;
@@ -109,13 +117,23 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
         }
       }
 
+      // Include the file that setups the buffers and sycl variables used in the kernel.
+      #include "setup_sycl.cpp"
+
       auto tpBefore = std::chrono::high_resolution_clock::now();
+      tpV[CK] = tpBefore;
+      if(firstCPU){
+        opts.tpFirstCPU = tpBefore;
+      }
+      else if(!cpu && pkgdevid == 0){
+        opts.tpFirstAcc = tpBefore;
+      }
       auto diffBefore = (tpBefore - tpStart).count();
       auto tBefore = diffBefore / 1e9;
       std::string aux = std::to_string(tBefore) + " < [" + std::to_string(pkg) + "] (" + std::to_string(pkgdevid) + ") size : " + std::to_string(size) + " offset : " + std::to_string(offset);
       DEVICE_DEBUG(aux);
 
-      // Include the file that setups the buffers with the benchmark data and invokes the kernel
+      // Include the file that invokes the kernel
       #include "kernel_sycl.cpp"
       
       active_kernels++; // Increments the number of active buffers
@@ -131,13 +149,38 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
 
       auto tpAfter = std::chrono::high_resolution_clock::now();
 
+      // Time point before data transfer from device to host
+      auto tpStartDTH = std::chrono::high_resolution_clock::now();
+      auto diffStartDTH = (tpStartDTH - tpStart).count();
+      auto tStartDTH = diffStartDTH / 1e9;
+      aux = std::to_string(tStartDTH) + " : Start of data transfer from device to host";
+      DEVICE_DEBUG(aux);
+      {
+        sycl::host_accessor resultAccessor(*buf_c[CK], sycl::read_only);
+      }
+      // Time point after data transfer from device to host
+      auto tpEndDTH = std::chrono::high_resolution_clock::now();
+      auto diffEndDTH = (tpEndDTH - tpStart).count();
+      auto tEndDTH = diffEndDTH / 1e9;
+      aux = std::to_string(tEndDTH) + " : End of data transfer from device to host";
+      DEVICE_DEBUG(aux);
+      if(cpu){
+        std::lock_guard<std::mutex> lk(opts.mCPU);
+        opts.tpLastCPU = tpEndDTH;
+      }
+      else{
+        opts.tpLastAcc = tpEndDTH;
+      }
+
       auto time_submit = submit_event[CK].get_profiling_info<sycl::info::event_profiling::command_submit>();
       auto time_start = submit_event[CK].get_profiling_info<sycl::info::event_profiling::command_start>();
       auto time_end = submit_event[CK].get_profiling_info<sycl::info::event_profiling::command_end>();
 
-      double tTotal = (time_end - time_submit) / 1e9;
+      double tTotalKernel = (time_end - time_submit) / 1e9;
       double tCompute = (time_end - time_start) / 1e9;
-      double tSubmit = (time_start - time_submit) / 1e9;
+      double tTotalEvent = (tpAfter - tpV[CK]).count() / 1e9;
+      double tDTH = (tpEndDTH - tpStartDTH).count() / 1e9;
+      double tTotal = tDTH + tTotalEvent;
 
       auto diffAfter = (tpAfter - tpStart).count();
       auto tAfter = diffAfter / 1e9;
@@ -150,15 +193,11 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
 
       if (cpu) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
-        opts.tComputeKernelCPU += tCompute;
-        opts.tSubmitKernelCPU += tSubmit;
-        opts.saveWorkPackages(cpu, pkgDevV[CK], offsetV[CK], sizeV[CK], tCompute);
-        opts.workSizeCPU += sizeV[CK];
+        opts.saveWorkPackages(cpu, thr_id, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
+        opts.workSizeCPU += size;
       } else {
-        opts.tComputeKernelAcc += tCompute;
-        opts.tSubmitKernelAcc += tSubmit;
-        opts.saveWorkPackages(cpu, pkgDevV[CK], offsetV[CK], sizeV[CK], tCompute);
-        opts.workSizeAcc += sizeV[CK];
+        opts.saveWorkPackages(cpu, 0, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
+        opts.workSizeAcc += size;
       }
 
     } // continue next packages
@@ -168,38 +207,60 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
     else CK = (CK + 1) % num_kernels;
     for(size_t i=0; i<active_kernels; i++){
       size_t eventIndex = (CK+i) % num_kernels;
-      uint64_t size = sizeV[eventIndex], offset = offsetV[eventIndex];
-      uint64_t pkgdevid = pkgDevV[eventIndex];
       submit_event[eventIndex].wait();
       auto tpAfter = std::chrono::high_resolution_clock::now();
+      auto tpStartDTH = std::chrono::high_resolution_clock::now();
+      auto diffStartDTH = (tpStartDTH - tpStart).count();
+      auto tStartDTH = diffStartDTH / 1e9;
+      std::string aux = std::to_string(tStartDTH) + " : Start of data transfer from device to host";
+      DEVICE_DEBUG(aux);
+      {
+        sycl::host_accessor resultAccessor(*buf_c[eventIndex], sycl::read_only);
+      }
+      // Time point after data transfer from device to host
+      auto tpEndDTH = std::chrono::high_resolution_clock::now();
+      auto diffEndDTH = (tpEndDTH - tpStart).count();
+      auto tEndDTH = diffEndDTH / 1e9;
+      aux = std::to_string(tEndDTH) + " : End of data transfer from device to host";
+      DEVICE_DEBUG(aux);
+
+      if(cpu){
+        std::lock_guard<std::mutex> lk(opts.mCPU);
+        opts.tpLastCPU = tpEndDTH;
+      }
+      else{
+        opts.tpLastAcc = tpEndDTH;
+      }
+      
+      uint64_t size = sizeV[eventIndex], offset = offsetV[eventIndex];
+
+      auto tpBefore = tpV[eventIndex];
 
       auto time_submit = submit_event[eventIndex].get_profiling_info<sycl::info::event_profiling::command_submit>();
       auto time_start = submit_event[eventIndex].get_profiling_info<sycl::info::event_profiling::command_start>();
       auto time_end = submit_event[eventIndex].get_profiling_info<sycl::info::event_profiling::command_end>();
 
-      double tTotal = (time_end - time_submit) / 1e9;
+      double tTotalKernel = (time_end - time_submit) / 1e9;
       double tCompute = (time_end - time_start) / 1e9;
-      double tSubmit = (time_start - time_submit) / 1e9;
+      double tTotalEvent = (tpAfter - tpBefore).count() / 1e9;
+      double tDTH = (tpEndDTH - tpStartDTH).count() / 1e9;
+      double tTotal = tDTH + tTotalEvent;
 
       auto diffAfter = (tpAfter - tpStart).count();
       auto tAfter = diffAfter / 1e9;
       auto bandwidth =  size / tCompute;
 
-      std::string aux = std::to_string(tAfter) + " >[" + std::to_string(pkgV[CK]) +"] Kernel times (Total : " + 
+      aux = std::to_string(tAfter) + " >[" + std::to_string(pkgV[CK]) +"] Kernel times (Total : " + 
                   std::to_string(tTotal) + " s, Compute: " + std::to_string(tCompute) + 
                   " s. Bandwidth: " + std::to_string(bandwidth) + " u/s";
       DEVICE_DEBUG(aux);
       
       if (cpu) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
-        opts.tComputeKernelCPU += tCompute;
-        opts.tSubmitKernelCPU += tSubmit;
-        opts.saveWorkPackages(cpu, pkgdevid, offset, size, tCompute);
+        opts.saveWorkPackages(cpu, thr_id, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
         opts.workSizeCPU += size;
       } else {
-        opts.tComputeKernelAcc += tCompute;
-        opts.tSubmitKernelAcc += tSubmit;
-        opts.saveWorkPackages(cpu, pkgdevid, offset, size, tCompute);
+        opts.saveWorkPackages(cpu, 0, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
         opts.workSizeAcc += size;
       }
     }

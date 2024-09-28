@@ -108,53 +108,86 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
       // Buffers and kernels management variables
       size_t CK = 0; // Index of the current kernel
       constexpr size_t num_kernels = 1; // Total number of kernels that can be active at the same time
-      sycl::event submit_event[num_kernels];
+      sycl::event submit_event[num_kernels];  // Array with the events of the kernels
       
       // Include the file that defines the buffers used in the kernel.
       #include "buffers_sycl.cpp"
 
+      // Include the file that setups the buffers and sycl variables used in the kernel.
+      #include "setup_sycl.cpp"
+
       auto tpBefore = std::chrono::high_resolution_clock::now();
+      if(cpu){
+          std::lock_guard<std::mutex> lk(opts.mCPU);
+          if(opts.firstCPU){
+            opts.tpFirstCPU = tpBefore;
+            opts.firstCPU = false;
+          }
+      }
+      else{
+        opts.tpFirstAcc = tpBefore;
+      }
       auto diffBefore = (tpBefore - tpStart).count();
       auto tBefore = diffBefore / 1e9;
       std::string aux = std::to_string(tBefore) + " < size : " + std::to_string(size) + " offset : " + std::to_string(offset);
       DEVICE_DEBUG(aux);
 
-
-      // Include the file that setups the buffers with the benchmark data and invokes the kernel
+      // Include the file that invokes the kernel
       #include "kernel_sycl.cpp"
 
       submit_event[CK].wait();
 
       // Time point after wait for kernel completion
       auto tpAfter = std::chrono::high_resolution_clock::now();
+      
+      // Time point before data transfer from device to host
+      auto tpStartDTH = std::chrono::high_resolution_clock::now();
+      auto diffStartDTH = (tpStartDTH - tpStart).count();
+      auto tStartDTH = diffStartDTH / 1e9;
+      aux = std::to_string(tStartDTH) + " : Start of data transfer from device to host";
+      DEVICE_DEBUG(aux);
+      {
+        sycl::host_accessor resultAccessor(*buf_c[CK], sycl::read_only);
+      }
+      // Time point after data transfer from device to host
+      auto tpEndDTH = std::chrono::high_resolution_clock::now();
+      auto diffEndDTH = (tpEndDTH - tpStart).count();
+      auto tEndDTH = diffEndDTH / 1e9;
+      aux = std::to_string(tEndDTH) + " : End of data transfer from device to host";
+      DEVICE_DEBUG(aux);
+      if(cpu){
+        std::lock_guard<std::mutex> lk(opts.mCPU);
+        opts.tpLastCPU = tpEndDTH;
+      }
+      else{
+        opts.tpLastAcc = tpEndDTH;
+      }
 
       //cl_ulong time_start, time_end, time_submit;
       auto time_submit = submit_event[CK].get_profiling_info<sycl::info::event_profiling::command_submit>();
       auto time_start = submit_event[CK].get_profiling_info<sycl::info::event_profiling::command_start>();
       auto time_end = submit_event[CK].get_profiling_info<sycl::info::event_profiling::command_end>();
 
-      double tTotal = (time_end - time_submit) / 1e9;
+      double tTotalKernel = (time_end - time_submit) / 1e9;
       double tCompute = (time_end - time_start) / 1e9;
-      double tSubmit = (time_start - time_submit) / 1e9;
+      double tTotalEvent = (tpAfter - tpBefore).count() / 1e9;
+      double tDTH = (tpEndDTH - tpStartDTH).count() / 1e9;
+      double tTotal = tDTH + tTotalEvent;
 
       auto diffAfter = (tpAfter - tpStart).count();
       auto tAfter = diffAfter / 1e9;
-      auto bandwidth =  size / tCompute;
+      auto bandwidth =  size*N / tCompute;
       aux = std::to_string(tAfter) + " > Kernel times (Total : " + 
-                  std::to_string(tTotal) + " s, Compute: " + std::to_string(tCompute) + 
+                  std::to_string(tTotalKernel) + " s, Compute: " + std::to_string(tCompute) + 
                   " s. Bandwidth: " + std::to_string(bandwidth) + " u/s";
       DEVICE_DEBUG(aux);
 
       if (cpu) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
-        opts.tComputeKernelCPU += tCompute;
-        opts.tSubmitKernelCPU += tSubmit;
-        opts.saveWorkPackages(cpu, thr_id, offset, size, tCompute);
+        opts.saveWorkPackages(cpu, thr_id, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
         opts.workSizeCPU += size;
       } else {
-        opts.tComputeKernelAcc += tCompute;
-        opts.tSubmitKernelAcc += tSubmit;
-        opts.saveWorkPackages(cpu, 0, offset, size, tCompute);
+        opts.saveWorkPackages(cpu, 0, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
         opts.workSizeAcc += size;
       }
       
