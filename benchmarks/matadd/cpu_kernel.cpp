@@ -8,7 +8,7 @@ sycl::event cpu_submitKernel(sycl::queue& q, sycl::buffer<ptype,2>& buf_a, sycl:
       
       sycl::accessor a(buf_a, h, sycl::read_only);
       sycl::accessor b(buf_b, h, sycl::read_only);
-      sycl::accessor c(buf_c, h, sycl::write_only);
+      sycl::accessor c(buf_c, h, sycl::write_only, sycl::no_init);
 
       h.parallel_for<KernelMataddCPU>(size_range, [=](sycl::nd_item<2> item){
         size_t i = item.get_global_id(0);
@@ -16,5 +16,6 @@ sycl::event cpu_submitKernel(sycl::queue& q, sycl::buffer<ptype,2>& buf_a, sycl:
         c[{i,j}] = a[{i,j}] + b[{i,j}];
       });
     });
+    
     return kern_ev;
 }

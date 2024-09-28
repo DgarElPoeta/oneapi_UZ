@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
   std::chrono::high_resolution_clock::time_point tpStart = std::chrono::high_resolution_clock::now();
 
   // -------------------------------------------------------------------------------------------------
-  // Arguments comprobation and initialization
+  // Arguments verification and initialization
 
   argc--;
   if (argc < 4) {
@@ -219,6 +219,8 @@ int main(int argc, char *argv[]) {
   opts.tCPUEnd = 0;
   opts.tAccEnd = 0;
 
+  opts.firstCPU = true;
+
   opts.tComputeKernelCPU = 0;
   opts.tComputeKernelAcc = 0;
   opts.tSubmitKernelCPU = 0;
@@ -231,7 +233,7 @@ int main(int argc, char *argv[]) {
   opts.pData.size = N;
   opts.pData.a = std::vector<ptype>(N*N);
   opts.pData.b = std::vector<ptype>(N*N);
-  opts.pData.c = std::vector<ptype>(N*N,0.0);
+  opts.pData.c = std::vector<ptype>(N*N);
 
 
   // -------------------------------------------------------------------------------------------------
@@ -398,9 +400,7 @@ int main(int argc, char *argv[]) {
   if (mode == Mode::GPU || mode == Mode::FPGA || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
     std::cout << "Accelerator device: " << opts.accDeviceDesc << "\n";
     std::cout << "Number of work packages: " << pPkgAcc << ", number of total work items : " << opts.workSizeAcc << "\n";
-    std::cout << "Time spent on kernels:\n";
-    std::cout << "\tSubmitting and waiting for resources availability: " << opts.tSubmitKernelAcc << " s\n";
-    std::cout << "\tComputing: " << opts.tComputeKernelAcc << " s\n";
+    std::cout << "Time between first kernel submitted and last kernel that completed execution: " << (opts.tpLastAcc - opts.tpFirstAcc).count() / 1e9 << " s\n";
     std::cout << "Time spent on device: " << opts.tAccEnd << " s\n";
     
     if (pPkgAcc > 0){
@@ -408,20 +408,22 @@ int main(int argc, char *argv[]) {
       for (size_t i = 0; i < pPkgAcc; i++) {
         WorkPackages pkg = opts.wPkgsAcc[i];
         std::cout << "\tPackage " << i+1 << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
+                  << " s, total kernel time: " << pkg.tTotalKernel
+                  << " s, total event time: " << pkg.tTotalEvent
+                  << " s, DTH time: " << pkg.tDTH
+                  << " s, total time: " << pkg.tTotal
                   << " s, time since start of program: " << pkg.tSinceStart << " s\n";
       }
     }
+    std::cout << ("\n\n");
   }
 
-  std::cout << ("\n\n");
 
   // CPU device
   if (mode == Mode::CPU || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
     std::cout << "CPU device: " << opts.cpuDeviceDesc << "\n";
     std::cout << "Number of work packages: " << pPkgCPU << ", number of total work items : " << opts.workSizeCPU << "\n";
-    std::cout << "Time spent on kernels:\n";
-    std::cout << "\tSubmitting and waiting for resources availability: " << opts.tSubmitKernelCPU << " s\n";
-    std::cout << "\tComputing: " << opts.tComputeKernelCPU << " s\n";
+    std::cout << "Time between first kernel submitted and last kernel that completed execution: " << (opts.tpLastCPU - opts.tpFirstCPU).count() / 1e9 << " s\n";
     std::cout << "Time spent on device: " << opts.tCPUEnd << " s\n";
 
     if (pPkgCPU > 0){
@@ -429,11 +431,16 @@ int main(int argc, char *argv[]) {
       for (size_t i = 0; i < pPkgCPU; i++) {
         WorkPackages pkg = opts.wPkgsCPU[i];
         std::cout << "\tPackage " << i+1 << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
+                  << " s, total kernel time: " << pkg.tTotalKernel
+                  << " s, total event time: " << pkg.tTotalEvent
+                  << " s, DTH time: " << pkg.tDTH
+                  << " s, total time: " << pkg.tTotal
                   << " s, time since start of program: " << pkg.tSinceStart << " s\n";
       }
     }
-  }
+    
   std::cout << "\n";
+  }
 
   if (check) {
     std::cout << "Verificating the correctness of the results...\n";
