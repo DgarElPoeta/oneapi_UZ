@@ -9,7 +9,7 @@ sycl::event fpga_submitKernel(sycl::queue& q, sycl::buffer<ptype,2>& buf_input,
 
       sycl::accessor input(buf_input, h, sycl::read_only);
       sycl::accessor filter(buf_filter, h, sycl::read_only);
-      sycl::accessor blurred(buf_blurred, h, sycl::write_only);
+      sycl::accessor blurred(buf_blurred, h, sycl::write_only, sycl::no_init);
 
       h.parallel_for<KernelGaussianFPGA>(size_range, [=](sycl::nd_item<2> item){
         const size_t i = item.get_global_id(0);
