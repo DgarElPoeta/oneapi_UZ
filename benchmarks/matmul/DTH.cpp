@@ -1,0 +1,1 @@
+sycl::host_accessor c_result(*buf_c[eventIndex], sycl::read_only);

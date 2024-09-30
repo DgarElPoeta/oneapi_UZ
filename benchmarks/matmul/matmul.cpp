@@ -24,15 +24,15 @@ void process(bool cpu, Options<T>& opts, uint32_t thr_id) {
   }
 }
 
-int usage() {
-  std::cout
-      << "usage: <cpu|gpu|fpga|cpu_gpu|cpu_fpga> <static|dynamic|hguided> <num pkgs (dyn)|cpu proportion (st|hg)> <problem size> [num_cpp_threads]\n"
-      << "Environment variables:\n"
+int usage(const std::string &name) {
+  std::cerr
+      << "Usage:\n" << name << " <cpu|gpu|fpga|cpu_gpu|cpu_fpga> <static|dynamic|hguided> <num pkgs (dyn)|cpu proportion (st|hg)> <problem size> [num_cpp_threads]\n"
+      << "\nEnvironment variables:\n"
       << "DEBUG=y   to print messages during execution\n"
       << "CHECK=y   to evaluate the correctnes of the results\n"
       << "PRINT=y   to print the the data of the problem\n"
       << "MIN_PKG_MULTIPLIER=<uint>,<uint> (cpu,acc)   to specify the multiplier for the min package of each device in HGuided algorithm\n"
-      << "K=<float>   to specify the K value in HGuided algorithm\n";
+      << "K=<float>   to specify the K value in HGuided algorithm\n\n";
   return 1;
 }
 
@@ -95,11 +95,11 @@ int main(int argc, char *argv[]) {
 
   // -------------------------------------------------------------------------------------------------
   // Arguments verification and initialization
-
+  std::string name = argv[0];
   argc--;
   if (argc < 4) {
-    std::cerr << "Number of arguments is less than expected\n";
-    return usage();
+    std::cerr << "\nNumber of arguments is less than expected\n\n";
+    return usage(name);
   }
 
 
@@ -107,8 +107,8 @@ int main(int argc, char *argv[]) {
   std::string mode_str = argv[1]; // string with the mode
   Mode mode; // Heterogeneous execution mode
   if (!hashMode(mode_str, mode)) {
-    std::cerr << "Invalid mode\n";
-    return usage();
+    std::cerr << "\nInvalid mode\n\n";
+    return usage(name);
   }
 
 
@@ -116,8 +116,8 @@ int main(int argc, char *argv[]) {
   std::string algo_str = argv[2]; // string with the algorithm
   Algo algo; // Scheduler algorithm
   if (!hashAlgo(algo_str, algo)) {
-    std::cerr << "Invalid algorithm\n";
-    return usage();
+    std::cerr << "\nInvalid algorithm\n";
+    return usage(name);
   }
 
   
@@ -125,10 +125,19 @@ int main(int argc, char *argv[]) {
   float cpu_prop; // Work proportion assigned to CPU. Used in Static and HGuided Algorithms
   size_t num_pkgs; // Number of packages in which the total work is divided in Dynamic Algorithm
   if (algo == Algo::Dynamic) {
-    num_pkgs = atof(argv[3]);
+    int64_t pkgs = atoi(argv[3]);
+    if(pkgs <= 0){
+      std::cerr << "\nNumber of packages must be greater than 0\n\n";
+      return usage(name);
+    }
+    num_pkgs = pkgs;
   } else {
     if (mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
       cpu_prop = atof(argv[3]);
+      if(cpu_prop < 0 || cpu_prop > 1){
+        std::cerr << "\nCpu proportion must be between 0 and 1\n\n";
+        return usage(name);
+      }
     }
     else if(mode == Mode::CPU){
       cpu_prop = 1.0;
@@ -141,9 +150,9 @@ int main(int argc, char *argv[]) {
 
   // Problem dimension arg
   const uint64_t N = atoi(argv[4]); // Problem dimension
-  if (N == 0 || ((N & (WGS - 1)) != 0)) {
-    std::cerr << "Problem size must be greater than 0 and multiple of " << WGS << "\n";
-    return 1;
+  if (N == 0 || ((N/WGS) * WGS != N)) {
+    std::cerr << "\nProblem size must be greater than 0 and multiple of " << WGS << "\n\n";
+    return usage(name);
   }
 
 
@@ -189,7 +198,7 @@ int main(int argc, char *argv[]) {
   }
 
   // K environment variable
-  char *K_str = getenv("HGUIDED_K");
+  char *K_str = getenv("K");
   float K = 2.0;
   if (K_str != nullptr) {
     float K_ = std::stof(K_str);
@@ -369,14 +378,19 @@ int main(int argc, char *argv[]) {
   std::cout << "Scheduler: ";
   if (algo == Algo::Static){
     std::cout << "Static\n";
+    std::cout << "Scheduler parameters:\n";
+    std::cout << " CPU proportion: " << cpu_prop << "\n";
 
   } else if (algo == Algo::Dynamic) {
     std::cout << "Dynamic\n";
+    std::cout << "Scheduler parameters:\n";
+    std::cout << " Number of packages: " << num_pkgs << "\n";
   } else if (algo == Algo::HGuided) {
     std::cout << "HGuided\n";
-    std::cout << "scheduler parameters:\n";
+    std::cout << "Scheduler parameters:\n";
+    std::cout << " CPU proportion: " << cpu_prop << "\n";
     std::cout << " K: " << opts.K << "\n";
-    std::cout << " min_pkg_Multiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
+    std::cout << " min_pkg_multiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
   }
   std::cout << "\n\n";
 
