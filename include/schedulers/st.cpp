@@ -146,8 +146,11 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tStartDTH = diffStartDTH / 1e9;
       aux = std::to_string(tStartDTH) + " : Start of data transfer from device to host";
       DEVICE_DEBUG(aux);
+      
+      size_t eventIndex = CK;
       {
-        sycl::host_accessor resultAccessor(*buf_c[CK], sycl::read_only);
+        // Include the file that defines the host_accessors used for the data transmissions from device to host.
+        #include "DTH.cpp"
       }
       // Time point after data transfer from device to host
       auto tpEndDTH = std::chrono::high_resolution_clock::now();

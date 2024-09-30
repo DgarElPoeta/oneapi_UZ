@@ -142,8 +142,11 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tStartDTH = diffStartDTH / 1e9;
       aux = std::to_string(tStartDTH) + " : Start of data transfer from device to host";
       DEVICE_DEBUG(aux);
+
+      size_t eventIndex = CK;
       {
-        sycl::host_accessor resultAccessor(*buf_c[CK], sycl::read_only);
+        // Include the file that defines the host_accessors used for the data transmissions from device to host.
+        #include "DTH.cpp"
       }
       // Time point after data transfer from device to host
       auto tpEndDTH = std::chrono::high_resolution_clock::now();
@@ -180,11 +183,11 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
 
       if (cpu) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
-        opts.saveWorkPackages(cpu, thr_id, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
-        opts.workSizeCPU += size;
+        opts.saveWorkPackages(cpu, pkgDevV[CK], offsetV[CK], sizeV[CK], tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
+        opts.workSizeCPU += sizeV[CK];
       } else {
-        opts.saveWorkPackages(cpu, 0, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
-        opts.workSizeAcc += size;
+        opts.saveWorkPackages(cpu, pkgDevV[CK], offsetV[CK], sizeV[CK], tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
+        opts.workSizeAcc += sizeV[CK];
       }
 
     } // continue next packages
@@ -199,8 +202,10 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
       auto tStartDTH = diffStartDTH / 1e9;
       std::string aux = std::to_string(tStartDTH) + " : Start of data transfer from device to host";
       DEVICE_DEBUG(aux);
+      
       {
-        sycl::host_accessor resultAccessor(*buf_c[eventIndex], sycl::read_only);
+        // Include the file that defines the host_accessors used for the data transmissions from device to host.
+        #include "DTH.cpp"
       }
       // Time point after data transfer from device to host
       auto tpEndDTH = std::chrono::high_resolution_clock::now();
@@ -217,7 +222,7 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
         opts.tpLastAcc = tpEndDTH;
       }
 
-      uint64_t size = sizeV[eventIndex], offset = offsetV[eventIndex];
+      uint64_t pkgdevid = pkgDevV[eventIndex], size = sizeV[eventIndex], offset = offsetV[eventIndex];
 
       auto tpBefore = tpV[eventIndex];
 
@@ -242,10 +247,10 @@ void process_dynamic(bool cpu, Options<T>& opts, uint32_t thr_id) {
       
       if (cpu) {
         std::lock_guard<std::mutex> lk(opts.mCPU);
-        opts.saveWorkPackages(cpu, thr_id, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
+        opts.saveWorkPackages(cpu, pkgdevid, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
         opts.workSizeCPU += size;
       } else {
-        opts.saveWorkPackages(cpu, 0, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
+        opts.saveWorkPackages(cpu, pkgdevid, offset, size, tCompute, tTotalKernel, tTotalEvent, tDTH, tTotal);
         opts.workSizeAcc += size;
       }
     }
