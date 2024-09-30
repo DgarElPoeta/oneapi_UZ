@@ -24,15 +24,15 @@ void process(bool cpu, Options<T>& opts, uint32_t thr_id) {
   }
 }
 
-int usage() {
-  std::cout
-      << "usage: <cpu|gpu|fpga|cpu_gpu|cpu_fpga> <static|dynamic|hguided> <num pkgs (dyn)|cpu proportion (st|hg)> <problem size> [num_cpp_threads]\n"
-      << "Environment variables:\n"
+int usage(const std::string &name) {
+  std::cerr
+      << "Usage:\n" << name << " <cpu|gpu|fpga|cpu_gpu|cpu_fpga> <static|dynamic|hguided> <num pkgs (dyn)|cpu proportion (st|hg)> <problem size> [num_cpp_threads]\n"
+      << "\nEnvironment variables:\n"
       << "DEBUG=y   to print messages during execution\n"
       << "CHECK=y   to evaluate the correctnes of the results\n"
       << "PRINT=y   to print the the data of the problem\n"
       << "MIN_PKG_MULTIPLIER=<uint>,<uint> (cpu,acc)   to specify the multiplier for the min package of each device in HGuided algorithm\n"
-      << "K=<float>   to specify the K value in HGuided algorithm\n";
+      << "K=<float>   to specify the K value in HGuided algorithm\n\n";
   return 1;
 }
 
@@ -162,11 +162,11 @@ int main(int argc, char *argv[]) {
 
   // -------------------------------------------------------------------------------------------------
   // Arguments comprobation and initialization
-
+  std::string name = argv[0];
   argc--;
   if (argc < 4) {
-    std::cerr << "Number of arguments is less than expected\n";
-    return usage();
+    std::cerr << "\nNumber of arguments is less than expected\n\n";
+    return usage(name);
   }
 
 
@@ -174,8 +174,8 @@ int main(int argc, char *argv[]) {
   std::string mode_str = argv[1]; // string with the mode
   Mode mode; // Heterogeneous execution mode
   if (!hashMode(mode_str, mode)) {
-    std::cerr << "Invalid mode\n";
-    return usage();
+    std::cerr << "\nInvalid mode\n\n";
+    return usage(name);
   }
 
 
@@ -183,8 +183,8 @@ int main(int argc, char *argv[]) {
   std::string algo_str = argv[2]; // string with the algorithm
   Algo algo; // Scheduler algorithm
   if (!hashAlgo(algo_str, algo)) {
-    std::cerr << "Invalid algorithm\n";
-    return usage();
+    std::cerr << "\nInvalid algorithm\n";
+    return usage(name);
   }
 
   
@@ -192,10 +192,19 @@ int main(int argc, char *argv[]) {
   float cpu_prop; // Work proportion assigned to CPU. Used in Static and HGuided Algorithms
   size_t num_pkgs; // Number of packages in which the total work is divided in Dynamic Algorithm
   if (algo == Algo::Dynamic) {
-    num_pkgs = atof(argv[3]);
+    int64_t pkgs = atoi(argv[3]);
+    if(pkgs <= 0){
+      std::cerr << "\nNumber of packages must be greater than 0\n\n";
+      return usage(name);
+    }
+    num_pkgs = pkgs;
   } else {
     if (mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
       cpu_prop = atof(argv[3]);
+      if(cpu_prop < 0 || cpu_prop > 1){
+        std::cerr << "\nCpu proportion must be between 0 and 1\n\n";
+        return usage(name);
+      }
     }
     else if(mode == Mode::CPU){
       cpu_prop = 1.0;
@@ -208,9 +217,9 @@ int main(int argc, char *argv[]) {
 
   // Problem dimension arg
   const uint64_t N = atoi(argv[4]); // Problem dimension
-  if (N == 0 || ((N & (WGS - 1)) != 0)) {
-    std::cerr << "Problem size must be greater than 0 and multiple of " << WGS << "\n";
-    return 1;
+  if (N == 0 || ((N/WGS) * WGS != N)) {
+    std::cerr << "\nProblem size must be greater than 0 and multiple of " << WGS << "\n\n";
+    return usage(name);
   }
 
 
@@ -238,7 +247,7 @@ int main(int argc, char *argv[]) {
   char *print_str = getenv("PRINT"); // string with the print value
   bool print = (print_str != NULL && std::string(print_str) == "y"); // Print problem data activated(true) or deactivated(false)
 
-  // Processing capabilities of CPU and Accelerator. Used in HGuided Algorithm
+  // Multipliers of work package size of CPU and Accelerator. Used in HGuided Algorithm
   uint32_t min_multiplier[2] = {1, 1};
 
   // MIN_PKG_MULTIPLIER environment variable
@@ -256,7 +265,7 @@ int main(int argc, char *argv[]) {
   }
 
   // K environment variable
-  char *K_str = getenv("HGUIDED_K");
+  char *K_str = getenv("K");
   float K = 2.0;
   if (K_str != nullptr) {
     float K_ = std::stof(K_str);
@@ -265,8 +274,8 @@ int main(int argc, char *argv[]) {
 
   // -------------------------------------------------------------------------------------------------
 
-
   
+
   // -------------------------------------------------------------------------------------------------
   // Initialization of Options data type
 
@@ -304,6 +313,8 @@ int main(int argc, char *argv[]) {
 
   opts.tCPUEnd = 0;
   opts.tAccEnd = 0;
+
+  opts.firstCPU = true;
 
   opts.tComputeKernelCPU = 0;
   opts.tComputeKernelAcc = 0;
@@ -442,14 +453,19 @@ int main(int argc, char *argv[]) {
   std::cout << "Scheduler: ";
   if (algo == Algo::Static){
     std::cout << "Static\n";
+    std::cout << "Scheduler parameters:\n";
+    std::cout << " CPU proportion: " << cpu_prop << "\n";
 
   } else if (algo == Algo::Dynamic) {
     std::cout << "Dynamic\n";
+    std::cout << "Scheduler parameters:\n";
+    std::cout << " Number of packages: " << num_pkgs << "\n";
   } else if (algo == Algo::HGuided) {
     std::cout << "HGuided\n";
-    std::cout << "scheduler parameters:\n";
+    std::cout << "Scheduler parameters:\n";
+    std::cout << " CPU proportion: " << cpu_prop << "\n";
     std::cout << " K: " << opts.K << "\n";
-    std::cout << " min_pkg_pultiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
+    std::cout << " min_pkg_multiplier (cpu,acc): (" << opts.minMultiplierCPU << "," << opts.minMultiplierAcc << ")\n";
   }
   std::cout << "\n\n";
 
@@ -492,9 +508,7 @@ int main(int argc, char *argv[]) {
   if (mode == Mode::GPU || mode == Mode::FPGA || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
     std::cout << "Accelerator device: " << opts.accDeviceDesc << "\n";
     std::cout << "Number of work packages: " << pPkgAcc << ", number of total work items : " << opts.workSizeAcc << "\n";
-    std::cout << "Time spent on kernels:\n";
-    std::cout << "\tSubmitting and waiting for resources availability: " << opts.tSubmitKernelAcc << " s\n";
-    std::cout << "\tComputing: " << opts.tComputeKernelAcc << " s\n";
+    std::cout << "Time between first kernel submitted and last kernel that completed execution: " << (opts.tpLastAcc - opts.tpFirstAcc).count() / 1e9 << " s\n";
     std::cout << "Time spent on device: " << opts.tAccEnd << " s\n";
     
     if (pPkgAcc > 0){
@@ -502,20 +516,22 @@ int main(int argc, char *argv[]) {
       for (size_t i = 0; i < pPkgAcc; i++) {
         WorkPackages pkg = opts.wPkgsAcc[i];
         std::cout << "\tPackage " << i+1 << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
+                  << " s, total kernel time: " << pkg.tTotalKernel
+                  << " s, total event time: " << pkg.tTotalEvent
+                  << " s, DTH time: " << pkg.tDTH
+                  << " s, total time: " << pkg.tTotal
                   << " s, time since start of program: " << pkg.tSinceStart << " s\n";
       }
     }
+    std::cout << ("\n\n");
   }
 
-  std::cout << ("\n\n");
 
   // CPU device
   if (mode == Mode::CPU || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
     std::cout << "CPU device: " << opts.cpuDeviceDesc << "\n";
     std::cout << "Number of work packages: " << pPkgCPU << ", number of total work items : " << opts.workSizeCPU << "\n";
-    std::cout << "Time spent on kernels:\n";
-    std::cout << "\tSubmitting and waiting for resources availability: " << opts.tSubmitKernelCPU << " s\n";
-    std::cout << "\tComputing: " << opts.tComputeKernelCPU << " s\n";
+    std::cout << "Time between first kernel submitted and last kernel that completed execution: " << (opts.tpLastCPU - opts.tpFirstCPU).count() / 1e9 << " s\n";
     std::cout << "Time spent on device: " << opts.tCPUEnd << " s\n";
 
     if (pPkgCPU > 0){
@@ -523,11 +539,15 @@ int main(int argc, char *argv[]) {
       for (size_t i = 0; i < pPkgCPU; i++) {
         WorkPackages pkg = opts.wPkgsCPU[i];
         std::cout << "\tPackage " << i+1 << " -> size: " << pkg.size << ", offset: " << pkg.offset << ", computation time: " << pkg.tCompute 
+                  << " s, total kernel time: " << pkg.tTotalKernel
+                  << " s, total event time: " << pkg.tTotalEvent
+                  << " s, DTH time: " << pkg.tDTH
+                  << " s, total time: " << pkg.tTotal
                   << " s, time since start of program: " << pkg.tSinceStart << " s\n";
       }
     }
+    std::cout << "\n\n";
   }
-  std::cout << "\n";
 
   if (check) {
     std::cout << "Verificating the correctness of the results...\n";

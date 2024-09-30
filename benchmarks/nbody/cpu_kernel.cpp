@@ -9,8 +9,8 @@ sycl::event cpu_submitKernel(sycl::queue& q, sycl::buffer<ptype,1>& buf_pos_in, 
       sycl::accessor pos(buf_pos_in, h, sycl::read_only);
       sycl::accessor vel(buf_vel_in, h, sycl::read_only);
       sycl::accessor mass(body_mass, h, sycl::read_only);
-      sycl::accessor newPosition(buf_pos_out, h, sycl::write_only);
-      sycl::accessor newVelocity(buf_vel_out, h, sycl::write_only);
+      sycl::accessor newPosition(buf_pos_out, h, sycl::write_only, sycl::no_init);
+      sycl::accessor newVelocity(buf_vel_out, h, sycl::write_only, sycl::no_init);
 
       h.parallel_for<KernelNbodyCPU>(size_range, [=](sycl::nd_item<1> item){
         size_t tid = item.get_global_id(0);
