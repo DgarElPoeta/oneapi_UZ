@@ -42,7 +42,7 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
 
     DEVICE_DEBUG("selected");
 
-    float computePower = cpu ? opts.cpuProp / opts.numCppThreads : 1 - opts.cpuProp;
+    float computePower = cpu ? opts.cpuProp / opts.numCPUThreads : 1 - opts.cpuProp;
     float K = opts.K;
     uint32_t minMultiplier = cpu ? opts.minMultiplierCPU : opts.minMultiplierAcc;
 

@@ -50,8 +50,8 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
     size_accelerator = (cpu_prop == 0.0f) ? total_size : (size_accelerator / pkg_size_multiple) * pkg_size_multiple;
     uint64_t size_CPU = total_size - size_accelerator;
 
-    uint32_t num_cpp_threads = opts.numCppThreads;
-    uint64_t eThread = ((size_CPU / num_cpp_threads) < pkg_size_multiple) ?  size_CPU / pkg_size_multiple : num_cpp_threads;
+    uint32_t num_cpu_threads = opts.numCPUThreads;
+    uint64_t eThread = ((size_CPU / num_cpu_threads) < pkg_size_multiple) ?  size_CPU / pkg_size_multiple : num_cpu_threads;
 
     uint64_t offset_CPU = size_accelerator;
     if(size_CPU > 0 ){
@@ -59,7 +59,7 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
         size_CPU = total_size;
         *(opts.pPkgCPU) = 1;
       }
-      else if(eThread < num_cpp_threads){
+      else if(eThread < num_cpu_threads){
         if(thr_id + 1 == eThread && size_CPU != eThread * pkg_size_multiple){
           size_CPU = size_CPU - eThread * pkg_size_multiple;
           offset_CPU += eThread * pkg_size_multiple;
@@ -74,13 +74,13 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
       }
       else{
         uint64_t total_pkg = size_CPU / pkg_size_multiple;
-        uint64_t pkg_per_thread = total_pkg / num_cpp_threads;
-        uint64_t pkg_1more = total_pkg - pkg_per_thread * num_cpp_threads;
+        uint64_t pkg_per_thread = total_pkg / num_cpu_threads;
+        uint64_t pkg_1more = total_pkg - pkg_per_thread * num_cpu_threads;
         if(thr_id < pkg_1more){
           size_CPU = (pkg_per_thread + 1) * pkg_size_multiple;
           offset_CPU += thr_id * (pkg_per_thread + 1) * pkg_size_multiple;
         }
-        else if(size_CPU != total_pkg * pkg_size_multiple && thr_id+1 == num_cpp_threads){
+        else if(size_CPU != total_pkg * pkg_size_multiple && thr_id+1 == num_cpu_threads){
           size_CPU -= (total_pkg - pkg_per_thread) * pkg_size_multiple;
           offset_CPU += (total_pkg - pkg_per_thread) * pkg_size_multiple;
         }
@@ -88,7 +88,7 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
           size_CPU = pkg_per_thread * pkg_size_multiple;
           offset_CPU += pkg_1more * pkg_size_multiple + thr_id * pkg_per_thread * pkg_size_multiple;
         }
-        if(thr_id == 0) *(opts.pPkgCPU) = num_cpp_threads;
+        if(thr_id == 0) *(opts.pPkgCPU) = num_cpu_threads;
 
       }
     }

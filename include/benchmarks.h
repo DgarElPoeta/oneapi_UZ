@@ -118,8 +118,8 @@ template <typename T> struct Options {
   // Description of accelerator device and cpu device.
   std::string accDeviceDesc, cpuDeviceDesc;
 
-  // Number of threads
-  uint32_t numCppThreads;
+  // Number of CPU threads
+  uint32_t numCPUThreads;
 
   // Mutexes used for synchronization in critical sections
   std::mutex mWork; // mutex used when a load scheduler process requires work packages. Used in Dynamic an HGuided Algorithm.
@@ -170,7 +170,7 @@ template <typename T> struct Options {
     constexpr size_t dim = 20;
     size_t pCPU = dim, pAcc = dim;
     if(algo == Algo::Static){
-      pCPU = 1 * numCppThreads;
+      pCPU = 1 * numCPUThreads;
       pAcc = 1;
       wPkgsCPU.reserve(pCPU);
       wPkgsAcc.reserve(pAcc);
