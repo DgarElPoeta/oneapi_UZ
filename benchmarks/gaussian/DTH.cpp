@@ -1,1 +1,1 @@
-sycl::host_accessor blurred_result(*buf_blurred[eventIndex], sycl::read_only);
+sycl::host_accessor blurred_result(buf_blurred[eventIndex], sycl::read_only);
