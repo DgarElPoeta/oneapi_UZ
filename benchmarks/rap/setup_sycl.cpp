@@ -1,27 +1,17 @@
-// you have to use `size` and `offset`
-// does are part of N
+// Define range of the global work size.
+const sycl::range<1> range_gws = sycl::range<1>(size); 
 
-Rap* rap = reinterpret_cast<Rap*>(opts->p_problem);
-auto N = rap->size; // all problem, rap->size is different than `size`
-auto Rw = sycl::range<1>(size);
-auto R = sycl::range<1>(N); // func
+// Define range of the local work size.
+const sycl::range<1> range_lws(wgs);
 
-if (debug) {
-  std::cout << "Rw(opt2): (" << size << ")\n";
-  std::cout << "Rdb(opt1,func): (" << size+offset << ")\n";
-  std::cout << "R(opt1,func): (" << N << ")\n";
-}
+/*
+ * We define the nd_range of the problem. It combines the range of the global work size and 
+ * the range of the local work size.
+ */
+const sycl::nd_range<1> size_range(range_gws, range_lws);
 
-/*sycl::buffer<ptype, 1> buf_a(rap->a, R);
-sycl::buffer<ptype, 1> buf_b((rap->b + offset), Rw); // offset should be done inside
-sycl::buffer<ptype, 1> buf_func((rap->func), R);*/
+// Get the offset pointers values
+ptype* b = opts.pData.b.data() + offset;
 
-auto Rdb = sycl::range<1>(size+offset);
-buf_a[DB].reset(new sycl::buffer<ptype, 1>(rap->a, Rdb));
-buf_b[DB].reset(new sycl::buffer<ptype, 1>((rap->b + offset), Rw));
-buf_func[DB].reset(new sycl::buffer<ptype, 1>((rap->func), Rdb));
-
-auto M = rap->M;
-
-sycl::range<1> range_lws(atoi(getenv("LWS")));
-sycl::nd_range<1> size_range(Rw, range_lws);
+// Set the buffers
+buf_b[CK] = sycl::buffer<ptype, 1>(b, range_gws);
