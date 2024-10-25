@@ -4,6 +4,7 @@
 #include <random>
 #include <thread>
 #include <iostream>
+#include <iomanip>
 
 #include "mandelbrot.h"
 #include "benchmarks.h"
@@ -12,6 +13,7 @@
 #include "schedulers/dyn.cpp"
 #include "schedulers/hg.cpp"
 
+// Function that processes the scheduler algorithm
 template <typename T>
 void process(bool cpu, Options<T>& opts, uint32_t thr_id) {
   
@@ -24,18 +26,22 @@ void process(bool cpu, Options<T>& opts, uint32_t thr_id) {
   }
 }
 
+// Function that prints the usage of the program and returns 1
 int usage(const std::string &name) {
   std::cerr
-      << "Usage:\n" << name << " <cpu|gpu|fpga|cpu_gpu|cpu_fpga> <static|dynamic|hguided> <num pkgs (dyn)|cpu proportion (st|hg)> <problem size> [num_cpp_threads]\n"
+      << "Usage:\n" << name << " <cpu|fpga|cpu_fpga> <static|dynamic|hguided> <num pkgs (dyn)|cpu proportion (st|hg)> <problem size> \n"
       << "\nEnvironment variables:\n"
       << "DEBUG=y   to print messages during execution\n"
       << "CHECK=y   to evaluate the correctnes of the results\n"
       << "PRINT=y   to print the the data of the problem\n"
       << "MIN_PKG_MULTIPLIER=<uint>,<uint> (cpu,acc)   to specify the multiplier for the min package of each device in HGuided algorithm\n"
-      << "K=<float>   to specify the K value in HGuided algorithm\n\n";
+      << "K=<float>   to specify the K value in HGuided algorithm\n"
+      << "NUM_CPU_THREADS=<uint>   to specify the number of threads in CPU mode\n"
+      << "\n";
   return 1;
 }
 
+// Function that writes in standar output the matrix
 void print_image(std::string name, std::vector<ptype>& image, uint64_t N, uint64_t max_iterarions) {
   std::cout << name << "\n";
   for (size_t i = 0; i < N; ++i) {
@@ -47,6 +53,7 @@ void print_image(std::string name, std::vector<ptype>& image, uint64_t N, uint64
   }
 }
 
+// Function that verifies the correctness of the results
 bool verify(Mandelbrot& m) {
   bool verification_passed = true;
 
@@ -90,12 +97,17 @@ int main(int argc, char *argv[]) {
   // Initial timepoint of program
   std::chrono::high_resolution_clock::time_point tpStart = std::chrono::high_resolution_clock::now();
 
+  { // Program scope
+
   // -------------------------------------------------------------------------------------------------
   // Arguments comprobation and initialization
+
+  // Get the name of the program
   std::string name = argv[0];
+  
   argc--;
-  if (argc < 4) {
-    std::cerr << "\nNumber of arguments is less than expected\n\n";
+  if (argc != 4) {
+    std::cerr << "\nNumber of arguments is different than expected\n\n";
     return usage(name);
   }
 
@@ -129,7 +141,7 @@ int main(int argc, char *argv[]) {
     }
     num_pkgs = pkgs;
   } else {
-    if (mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
+    if (mode == Mode::CPU_FPGA) {
       cpu_prop = atof(argv[3]);
       if(cpu_prop < 0 || cpu_prop > 1){
         std::cerr << "\nCpu proportion must be between 0 and 1\n\n";
@@ -147,16 +159,9 @@ int main(int argc, char *argv[]) {
 
   // Problem dimension arg
   const uint64_t N = atoi(argv[4]); // Problem dimension
-  if (N == 0 || ((N/WGS) * WGS != N)) {
-    std::cerr << "\nProblem size must be greater than 0 and multiple of " << WGS << "\n\n";
+  if (N == 0 || ((N/WORK_GROUP_SIZE) * WORK_GROUP_SIZE != N)) {
+    std::cerr << "\nProblem size must be greater than 0 and multiple of " << WORK_GROUP_SIZE << "\n\n";
     return usage(name);
-  }
-
-
-  // Number of cpp threads arg
-  uint32_t num_cpp_threads = 1; // Number of cpp threads
-  if (argc >= 5) {
-    num_cpp_threads = atoi(argv[5]);
   }
 
   // -------------------------------------------------------------------------------------------------
@@ -189,7 +194,12 @@ int main(int argc, char *argv[]) {
     std::string item;
     auto i = 0;
     while (std::getline(ss, item, ',')) {
-      min_multiplier[i] = std::stoi(item);
+      int32_t mult = std::stoi(item);
+      if(mult <= 0){
+        std::cerr << "\nMin package multiplier must be greater than 0\n\n";
+        return usage(name);
+      }
+      min_multiplier[i] = mult;
       i++;
     }
   }
@@ -199,7 +209,19 @@ int main(int argc, char *argv[]) {
   float K = 2.0;
   if (K_str != nullptr) {
     float K_ = std::stof(K_str);
-      K = K_;
+    K = K_;
+  }
+
+  // Number of cpu threads environment variable
+  uint32_t num_cpu_threads = 1; // Number of cpu threads
+  char *NCT_str = getenv("NUM_CPU_THREADS");
+  if (NCT_str != nullptr) {
+    int nct = atoi(NCT_str);
+    if(nct <= 0){
+      std::cerr << "\nNumber of CPU threads must be greater than 0\n\n";
+      return usage(name);
+    }
+    num_cpu_threads = nct;
   }
 
   // -------------------------------------------------------------------------------------------------
@@ -225,7 +247,7 @@ int main(int argc, char *argv[]) {
   opts.accDeviceDesc = "";
   opts.cpuDeviceDesc = "";
   
-  opts.numCppThreads = num_cpp_threads;
+  opts.numCPUThreads = num_cpu_threads;
 
   opts.pTotalSize = N;
 
@@ -266,17 +288,19 @@ int main(int argc, char *argv[]) {
   // -------------------------------------------------------------------------------------------------
   // Load scheduler processes
 
+  std::cout << "Starting load scheduler...\n";  
+
   auto timePoint = std::chrono::high_resolution_clock::now();
   opts.tpSchedulerStart = timePoint;
   if (mode == Mode::CPU) {
 
-    opts.tpCPUStart = std::vector<std::chrono::high_resolution_clock::time_point>(num_cpp_threads);
+    opts.tpCPUStart = std::vector<std::chrono::high_resolution_clock::time_point>(num_cpu_threads);
 
     // Thread vector
-    std::vector<std::thread> vecOfThreads(num_cpp_threads-1);
+    std::vector<std::thread> vecOfThreads(num_cpu_threads-1);
 
     // Creation of CPU threads
-    for(size_t i=1; i<num_cpp_threads; i++){
+    for(size_t i=1; i<num_cpu_threads; i++){
       
       // Push start time of every thread created
       timePoint = std::chrono::high_resolution_clock::now();
@@ -295,10 +319,10 @@ int main(int argc, char *argv[]) {
 
     // Join of all CPU threads
     for (std::thread & th : vecOfThreads){
-      if (th.joinable()) th.join();
+      th.join();
     }
 
-  } else if (mode == Mode::GPU || mode == Mode::FPGA) {
+  } else if (mode == Mode::FPGA) {
     
     // Start time of accelerator scheduler process
     timePoint = std::chrono::high_resolution_clock::now();
@@ -309,13 +333,13 @@ int main(int argc, char *argv[]) {
 
   } else {
     
-    opts.tpCPUStart = std::vector<std::chrono::high_resolution_clock::time_point>(num_cpp_threads);
+    opts.tpCPUStart = std::vector<std::chrono::high_resolution_clock::time_point>(num_cpu_threads);
 
     // Thread vector
-    std::vector<std::thread> vecOfThreads(num_cpp_threads);
+    std::vector<std::thread> vecOfThreads(num_cpu_threads);
 
     // Creation of CPU threads
-    for(size_t i=0; i<num_cpp_threads; i++){
+    for(size_t i=0; i<num_cpu_threads; i++){
 
       // Push start time of every thread created
       timePoint = std::chrono::high_resolution_clock::now();
@@ -332,7 +356,7 @@ int main(int argc, char *argv[]) {
 
     // Join of all CPU threads
     for (std::thread & th : vecOfThreads){
-      if (th.joinable()) th.join();
+      th.join();
     }
   }
 
@@ -344,7 +368,7 @@ int main(int argc, char *argv[]) {
   auto tScheduler = diffScheduler / 1e9;
   
   // Execution summary
-  std::cout << "\n\n\n";
+  std::cout << std::fixed << std::setprecision(10) << "\n\n\n";
   std::cout << "---------------------------------------------------------------------------------\n";
   std::cout << "Execution summary\n";
   std::cout << "\n\n";
@@ -380,9 +404,7 @@ int main(int argc, char *argv[]) {
   switch(mode){
     case Mode::CPU:
       std::cout << "CPU\n";
-      break;
-    case Mode::GPU:
-      std::cout << "GPU\n";
+      std::cout << "Number of CPU threads: " << num_cpu_threads << "\n";
       break;
     case Mode::FPGA:
 #ifdef FPGA_EMULATOR
@@ -391,15 +413,13 @@ int main(int argc, char *argv[]) {
       std::cout << "FPGA\n";
 #endif
       break;
-    case Mode::CPU_GPU:
-      std::cout << "CPU + GPU\n";
-      break;
     case Mode::CPU_FPGA:
 #ifdef FPGA_EMULATOR
       std::cout << ("CPU + FPGA Emulator\n");
 #else
       std::cout << "CPU + FPGA\n";
 #endif
+      std::cout << "Number of CPU threads: " << num_cpu_threads << "\n";
       break;
   }
   std::cout << "\n\n";
@@ -411,7 +431,7 @@ int main(int argc, char *argv[]) {
   std::cout << "\n\n";
 
   // Accelerator device
-  if (mode == Mode::GPU || mode == Mode::FPGA || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
+  if (mode == Mode::FPGA || mode == Mode::CPU_FPGA) {
     std::cout << "Accelerator device: " << opts.accDeviceDesc << "\n";
     std::cout << "Number of work packages: " << pPkgAcc << ", number of total work items : " << opts.workSizeAcc << "\n";
     std::cout << "Time between first kernel submitted and last kernel that completed execution: " << (opts.tpLastAcc - opts.tpFirstAcc).count() / 1e9 << " s\n";
@@ -434,7 +454,7 @@ int main(int argc, char *argv[]) {
 
 
   // CPU device
-  if (mode == Mode::CPU || mode == Mode::CPU_GPU || mode == Mode::CPU_FPGA) {
+  if (mode == Mode::CPU || mode == Mode::CPU_FPGA) {
     std::cout << "CPU device: " << opts.cpuDeviceDesc << "\n";
     std::cout << "Number of work packages: " << pPkgCPU << ", number of total work items : " << opts.workSizeCPU << "\n";
     std::cout << "Time between first kernel submitted and last kernel that completed execution: " << (opts.tpLastCPU - opts.tpFirstCPU).count() / 1e9 << " s\n";
@@ -467,7 +487,12 @@ int main(int argc, char *argv[]) {
   if(print){
     print_image("Image", opts.pData.image, N, MAXITERATIONS);
   }
+ 
+  }  // End of program scope
 
+  std::chrono::high_resolution_clock::time_point tpEnd = std::chrono::high_resolution_clock::now();
+  std::cout << "\nTotal time elapsed in program: " << (tpEnd - tpStart).count() / 1e9 << " s\n";
   std::cout << "---------------------------------------------------------------------------------\n";
+
   return 0;
 }

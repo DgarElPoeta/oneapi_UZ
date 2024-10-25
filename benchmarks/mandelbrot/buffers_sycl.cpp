@@ -1,1 +1,1 @@
-std::unique_ptr<sycl::buffer<ptype, 2>> buf_out[num_kernels];
+std::vector<sycl::buffer<ptype, 2>> buf_out(num_kernels,sycl::buffer<ptype, 2>(opts.pData.image.data(),sycl::range(0,0)));

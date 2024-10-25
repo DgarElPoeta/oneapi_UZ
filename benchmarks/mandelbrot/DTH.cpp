@@ -1,1 +1,1 @@
-sycl::host_accessor out_result(*buf_out[eventIndex], sycl::read_only);
+sycl::host_accessor out_result(buf_out[eventIndex], sycl::read_only);
