@@ -33,18 +33,14 @@ bool hashAlgo(std::string sAlgo, Algo& algo){
 
 // Types of heterogeneous execution modes
 enum class Mode {
-  CPU, GPU, FPGA,CPU_GPU, CPU_FPGA
+  CPU, FPGA, CPU_FPGA
 };
 
 bool hashMode(std::string sMode, Mode& mode){
   if (sMode == "cpu") {
     mode = Mode::CPU;
-  } else if (sMode == "gpu") {
-    mode = Mode::GPU;
   } else if (sMode == "fpga") {
     mode = Mode::FPGA;
-  } else if (sMode == "cpu_gpu") {
-    mode = Mode::CPU_GPU;
   } else if (sMode == "cpu_fpga") {
     mode = Mode::CPU_FPGA;
   } else {
@@ -77,7 +73,8 @@ struct WorkPackages
   }
 };
 
-constexpr uint64_t WGS = 128;
+// Include file that defines WORK_GROUP_SIZE 
+#include "kernels.h"
 
 template <typename T> struct Options {
 
@@ -125,6 +122,8 @@ template <typename T> struct Options {
   std::mutex mWork; // mutex used when a load scheduler process requires work packages. Used in Dynamic an HGuided Algorithm.
   std::mutex mCPU; // mutex used when a load scheduler process related to CPU needs to update profiling times.
 
+  std::vector<std::mutex> mData;
+
   // Sizes of the problem. Used in Dynamic and HGuided Algorithm
   uint64_t pTotalSize; // Total size of the problem
   uint64_t* pWork; // Size of the problem solved at the moment
@@ -162,7 +161,7 @@ template <typename T> struct Options {
 
   T pData; // Benchmark data type with contains the data. Eg. Matmul, Gaussian
 
-  Options() : usm(false), wgs(WGS), sizeMultiple(wgs), mWork(), mCPU(){
+  Options() : usm(false), wgs(WORK_GROUP_SIZE), sizeMultiple(wgs), mWork(), mCPU(){
   }
 
   void setupWorkPkgs(){

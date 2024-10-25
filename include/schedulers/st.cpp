@@ -23,19 +23,11 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
       opts.cpuDeviceDesc = q.get_device().get_info<sycl::info::device::name>();
     }
     else{
-      switch(opts.mode) {
-        case Mode::GPU:
-        case Mode::CPU_GPU:
-          q = GPU_QUEUE;
-          break;
-        default:
 #ifdef FPGA_EMULATOR
-          q = FPGAEMU_QUEUE;
+      q = FPGAEMU_QUEUE;
 #else
-          q = FPGAHW_QUEUE;
+      q = FPGAHW_QUEUE;
 #endif
-          break;
-      }
       opts.accDeviceDesc = q.get_device().get_info<sycl::info::device::name>();
     }
 
@@ -51,24 +43,15 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
     uint64_t size_CPU = total_size - size_accelerator;
 
     uint32_t num_cpu_threads = opts.numCPUThreads;
-    uint64_t eThread = ((size_CPU / num_cpu_threads) < pkg_size_multiple) ?  size_CPU / pkg_size_multiple : num_cpu_threads;
+    uint64_t eThread = ((size_CPU / num_cpu_threads) < pkg_size_multiple) ?  (size_CPU / pkg_size_multiple) : num_cpu_threads;
 
     uint64_t offset_CPU = size_accelerator;
     if(size_CPU > 0 ){
-      if(eThread == 0 && thr_id == 0){
-        size_CPU = total_size;
-        *(opts.pPkgCPU) = 1;
-      }
-      else if(eThread < num_cpu_threads){
-        if(thr_id + 1 == eThread && size_CPU != eThread * pkg_size_multiple){
-          size_CPU = size_CPU - eThread * pkg_size_multiple;
-          offset_CPU += eThread * pkg_size_multiple;
-          *(opts.pPkgCPU) = eThread+1;
-        }
-        else if(thr_id < eThread){
+      if(eThread < num_cpu_threads){
+        if(thr_id == 0) *(opts.pPkgCPU) = eThread;
+        if(thr_id < eThread){
           size_CPU = pkg_size_multiple;
           offset_CPU += thr_id * pkg_size_multiple;
-          if(thr_id == 0) *(opts.pPkgCPU) = eThread;
         }
         else size_CPU = 0;
       }
@@ -79,10 +62,6 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
         if(thr_id < pkg_1more){
           size_CPU = (pkg_per_thread + 1) * pkg_size_multiple;
           offset_CPU += thr_id * (pkg_per_thread + 1) * pkg_size_multiple;
-        }
-        else if(size_CPU != total_pkg * pkg_size_multiple && thr_id+1 == num_cpu_threads){
-          size_CPU -= (total_pkg - pkg_per_thread) * pkg_size_multiple;
-          offset_CPU += (total_pkg - pkg_per_thread) * pkg_size_multiple;
         }
         else{
           size_CPU = pkg_per_thread * pkg_size_multiple;
@@ -98,7 +77,7 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
     }
     
     uint64_t size = ((cpu) ? size_CPU : size_accelerator);
-    uint64_t offset = ((cpu) ? offset_CPU: 0);
+    uint64_t offset = ((cpu) ? offset_CPU : 0);
 
     uint64_t wgs = opts.wgs;
 
@@ -179,7 +158,7 @@ void process_static(bool cpu, Options<T>& opts, uint32_t thr_id) {
 
       auto diffAfter = (tpAfter - tpStart).count();
       auto tAfter = diffAfter / 1e9;
-      auto bandwidth =  size*N / tCompute;
+      auto bandwidth =  size / tCompute;
       aux = std::to_string(tAfter) + " > Kernel times (Total : " + 
                   std::to_string(tTotalKernel) + " s, Compute: " + std::to_string(tCompute) + 
                   " s. Bandwidth: " + std::to_string(bandwidth) + " u/s";

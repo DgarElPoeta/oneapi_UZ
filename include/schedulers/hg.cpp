@@ -22,19 +22,11 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
       opts.cpuDeviceDesc = q.get_device().get_info<sycl::info::device::name>();
     }
     else{
-      switch(opts.mode) {
-        case Mode::GPU:
-        case Mode::CPU_GPU:
-          q = GPU_QUEUE;
-          break;
-        default:
 #ifdef FPGA_EMULATOR
-          q = FPGAEMU_QUEUE;
+      q = FPGAEMU_QUEUE;
 #else
-          q = FPGAHW_QUEUE;
+      q = FPGAHW_QUEUE;
 #endif
-          break;
-      }
       opts.accDeviceDesc = q.get_device().get_info<sycl::info::device::name>();
     }
 
@@ -72,49 +64,59 @@ void process_hguided(bool cpu, Options<T>& opts, uint32_t thr_id) {
       uint64_t pkgdevid = 0;
       bool firstCPU = false;
       {
-        std::lock_guard<std::mutex> lk(opts.mWork);
-        uint64_t pWork = *(opts.pWork);
-        uint64_t rest_size = opts.pTotalSize - pWork;
-        pkg = *(opts.pPkg);
-        if(cpu) pkgdevid = *(opts.pPkgCPU);
-        else pkgdevid = *(opts.pPkgAcc);
         
-        if (rest_size > 0) {
-          offset = pWork;
-          if (rest_size >= min_split) {
-  
-            uint64_t pkg_size = rest_size * computePower / K;
-            uint64_t mult = pkg_size / pkg_size_multiple;
-            if(pkg_size < min_split) pkg_size = min_split;
-            else{
-              pkg_size = (pkg_size != (mult * pkg_size_multiple)) ? pkg_size_multiple * mult : pkg_size;
-            } 
-            
-            pkg_size = (pkg_size >= rest_size) ? rest_size : pkg_size;
+        uint64_t rest_size = 0;
 
-            size = pkg_size;
-          } else {
-            size = rest_size;
-            work = false;
-          }
-          *(opts.pWork) += size;
-          pkgV[CK] = pkg;
-          *(opts.pPkg) = pkg+1;
-          pkgDevV[CK] = pkgdevid;
-          if (cpu){
-            *(opts.pPkgCPU) = pkgdevid+1;
-            if(opts.firstCPU) {
-              firstCPU = true;
-              opts.firstCPU = false;
+        {
+          std::lock_guard<std::mutex> lk(opts.mWork);
+          uint64_t pWork = *(opts.pWork);
+          rest_size = opts.pTotalSize - pWork;
+          pkg = *(opts.pPkg);
+
+          if(cpu) pkgdevid = *(opts.pPkgCPU);
+          else pkgdevid = *(opts.pPkgAcc);
+          
+          if (rest_size > 0) {
+            offset = pWork;
+            if (rest_size >= min_split) {
+    
+              uint64_t pkg_size = rest_size * computePower / K;
+              uint64_t mult = pkg_size / pkg_size_multiple;
+
+              if(pkg_size < min_split) pkg_size = min_split;
+              else{
+                pkg_size = (pkg_size != (mult * pkg_size_multiple)) ? pkg_size_multiple * mult : pkg_size;
+              }
+
+              size = (pkg_size >= rest_size) ? rest_size : pkg_size;
+              
+            } else {
+              size = rest_size;
+              work = false;
             }
-          } 
-          else *(opts.pPkgAcc) = pkgdevid+1;
-          sizeV[CK] = size;
-          offsetV[CK] = offset;
-        } else {
-          work = false;
-          continue;
+
+            *(opts.pWork) += size;
+            pkgV[CK] = pkg;
+            *(opts.pPkg) = pkg+1;
+            pkgDevV[CK] = pkgdevid;
+
+            if (cpu){
+              *(opts.pPkgCPU) = pkgdevid+1;
+              if(opts.firstCPU) {
+                firstCPU = true;
+                opts.firstCPU = false;
+              }
+            } 
+            else *(opts.pPkgAcc) = pkgdevid+1;
+
+            sizeV[CK] = size;
+            offsetV[CK] = offset;
+          }
+
         }
+
+        if(rest_size == 0) break;
+        
       }
 
       // Include the file that setups the buffers and sycl variables used in the kernel.
