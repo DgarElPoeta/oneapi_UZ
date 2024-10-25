@@ -1,6 +1,10 @@
 #ifndef MATADD_H
 #define MATADD_H
 
+#include <vector>
+#include <cstdint>
+#include <sycl/sycl.hpp>
+
 typedef float ptype;
 
 struct Matadd {
